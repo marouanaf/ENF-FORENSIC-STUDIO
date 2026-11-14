@@ -1,45 +1,76 @@
 @import "tailwindcss";
 
 :root {
-  --background: #020617; /* slate-950 */
-  --foreground: #f8fafc; /* slate-50 */
+  --background: #020617; /* Deepest forensic slate-950 */
+  --foreground: #f8fafc; /* Crisp readable slate-50 */
+  --surface-card: #090e1a; /* Slate-900 / 950 intermediate */
+  --surface-hover: #121a2d;
+  --border-muted: #1e293b;
+  --border-accent: #334155;
+  --emerald-glow: rgba(16, 185, 129, 0.4);
+  --cyan-glow: rgba(6, 182, 212, 0.4);
 }
 
-body {
+html, body {
   background-color: var(--background);
   color: var(--foreground);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  overflow-x: hidden;
+  overflow-x: clip; /* Hallmark rule 4 */
+  min-height: 100%;
+}
+
+/* Precision Monospace Typography */
+.font-mono-numbers {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* Accessible focus ring on all interactives (Hallmark rule 6) */
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid #10b981;
+  outline-offset: 2px;
+}
+
+/* Subtle engineering scanlines & grid background */
+.bg-grid-forensic {
+  background-size: 28px 28px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
 }
 
 /* Custom dark scrollbars */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
-  background: #090d16;
+  background: #050811;
 }
 ::-webkit-scrollbar-thumb {
   background: #1e293b;
-  border-radius: 3px;
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #334155;
 }
 
-/* Subtle tech grid background */
-.bg-grid-pattern {
-  background-size: 32px 32px;
-  background-image: 
-    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-}
-
+/* Radar & Signal glow effects */
 .radar-glow-emerald {
-  box-shadow: 0 0 25px -5px rgba(16, 185, 129, 0.35);
+  box-shadow: 0 0 35px -5px rgba(16, 185, 129, 0.35), inset 0 0 20px -10px rgba(16, 185, 129, 0.1);
 }
 
 .radar-glow-cyan {
-  box-shadow: 0 0 25px -5px rgba(6, 182, 212, 0.35);
+  box-shadow: 0 0 35px -5px rgba(6, 182, 212, 0.35), inset 0 0 20px -10px rgba(6, 182, 212, 0.1);
+}
+
+/* Scanline animation for video / optical inspect */
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(1000%); }
+}
+
+.animate-scanline {
+  animation: scanline 3s linear infinite;
 }

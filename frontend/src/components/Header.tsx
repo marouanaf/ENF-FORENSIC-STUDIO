@@ -1,11 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
-import { Activity, ShieldCheck, Zap, HelpCircle, Database, Globe2, Radio, Camera, RefreshCw } from "lucide-react";
+import { Activity, ShieldCheck, Zap, HelpCircle, Database, Globe2, Radio, Camera, RefreshCw, Cpu, Layers, Sparkles } from "lucide-react";
+import { EnfAnalysisMode } from "../lib/types";
 
 interface HeaderProps {
   backendOnline: boolean;
   activeDatabaseName?: string;
+  nominalGrid: number;
+  analysisMode: EnfAnalysisMode;
   onRun2017Simulation: () => void;
   isLoadingSimulation: boolean;
   onOpenUploadModal: () => void;
@@ -14,6 +17,8 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   backendOnline,
   activeDatabaseName,
+  nominalGrid,
+  analysisMode,
   onRun2017Simulation,
   isLoadingSimulation,
   onOpenUploadModal,
@@ -22,56 +27,59 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <>
-      <header className="border-b border-slate-800 bg-slate-950/85 backdrop-blur-md sticky top-0 z-40 px-4 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-4">
+      <header className="border-b border-slate-800/90 bg-slate-950/90 backdrop-blur-md sticky top-0 z-40 px-4 lg:px-8 py-2.5 flex flex-wrap items-center justify-between gap-3 shadow-lg shadow-black/40">
         {/* Brand & Studio Identity */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-md shadow-emerald-950">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500/20 via-teal-500/10 to-cyan-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-sm shadow-emerald-950">
             <Activity className="w-5 h-5 animate-pulse" />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-base font-extrabold tracking-tight text-white flex items-center gap-2">
-                GRIDTRACE <span className="text-[10px] uppercase px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono font-bold border border-emerald-500/40 tracking-wider">MULTI-MODAL ENF WORKSTATION</span>
+                GRIDTRACE
+                <span className="text-[10px] uppercase px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono font-bold border border-emerald-500/40 tracking-wider">
+                  ENF FORENSIC STUDIO
+                </span>
               </h1>
             </div>
             <p className="text-[11px] text-slate-400">
-              Acoustic Mains Hum & CMOS Rolling-Shutter Optical Flicker Authenticator (Continental Europe / Morocco ONEE 50 Hz)
+              Multi-Modal Electrical Network Frequency Audio & Rolling-Shutter Optical Authenticator
             </p>
           </div>
         </div>
 
-        {/* Action Bar & Forensic Controls */}
-        <div className="flex items-center flex-wrap gap-2.5">
-          {/* Active Database Badge */}
+        {/* Action Bar & Quick Controls */}
+        <div className="flex items-center flex-wrap gap-2">
+          {/* Active Grid Badge */}
           <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono bg-slate-900 border border-slate-800 text-slate-300">
             <Globe2 className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-            <span className="text-slate-500 text-[11px]">GRID:</span>
-            <span className="text-cyan-300 font-semibold truncate max-w-[200px]" title={activeDatabaseName}>
-              {activeDatabaseName || "CE / Morocco ONEE 50Hz"}
+            <span className="text-slate-500 text-[10px] uppercase font-semibold">Zone:</span>
+            <span className="text-cyan-300 font-semibold truncate max-w-[180px]" title={activeDatabaseName}>
+              {nominalGrid === 50 ? "CE / Morocco ONEE 50Hz" : "US / NERC 60Hz"}
             </span>
           </div>
 
-          {/* Backend Health Badge */}
+          {/* Backend Status Badge */}
           <div
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono border ${
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono border ${
               backendOnline
-                ? "bg-emerald-950/40 text-emerald-400 border-emerald-800/50"
-                : "bg-rose-950/40 text-rose-400 border-rose-800/50"
+                ? "bg-emerald-950/40 text-emerald-400 border-emerald-800/60"
+                : "bg-rose-950/40 text-rose-400 border-rose-800/60"
             }`}
           >
             <span
-              className={`w-2 h-2 rounded-full ${
+              className={`w-1.5 h-1.5 rounded-full ${
                 backendOnline ? "bg-emerald-400 animate-ping" : "bg-rose-400"
               }`}
             />
-            {backendOnline ? "DSP Engine Ready" : "Connecting..."}
+            {backendOnline ? "DSP Engine Ready" : "DSP Connecting..."}
           </div>
 
           {/* 2017 Zouz Vlogs Simulation Button */}
           <button
             onClick={onRun2017Simulation}
             disabled={isLoadingSimulation || !backendOnline}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white shadow-lg shadow-emerald-950/60 border border-emerald-400/30 transition-all disabled:opacity-50 cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white shadow-md shadow-emerald-950/60 border border-emerald-400/40 transition-all disabled:opacity-50 cursor-pointer"
             title="Runs full 2017-11-09 04:58:19 AM Africa/Casablanca simulation"
           >
             {isLoadingSimulation ? (
@@ -79,10 +87,10 @@ export const Header: React.FC<HeaderProps> = ({
             ) : (
               <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
             )}
-            <span>Run 2017 Zouz Vlogs Forensic Simulation</span>
+            <span>Run 2017 Zouz Vlogs Simulation</span>
           </button>
 
-          {/* Ingest Historical CSV */}
+          {/* Upload Grid CSV */}
           <button
             onClick={onOpenUploadModal}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
@@ -103,7 +111,28 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </header>
 
-      {/* Forensic Theory & Mathematical Specs Modal */}
+      {/* Telemetry Status Ribbon */}
+      <div className="bg-slate-900/60 border-b border-slate-800/60 px-4 lg:px-8 py-1.5 flex flex-wrap items-center justify-between text-[11px] font-mono text-slate-400 gap-2">
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <Cpu className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Sampling: <strong className="text-slate-200">fs = 1,000 Hz</strong></span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Layers className="w-3.5 h-3.5 text-cyan-400" />
+            <span>STFT: <strong className="text-slate-200">8x Zero-Padded Parabolic</strong></span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+            <span>Modality: <strong className="text-slate-200 uppercase">{analysisMode}</strong></span>
+          </div>
+        </div>
+        <div className="hidden md:flex items-center gap-3 text-slate-500">
+          <span>Shortcuts: <kbd className="bg-slate-800 text-slate-300 px-1 rounded text-[10px]">Space</kbd> Play/Pause</span>
+        </div>
+      </div>
+
+      {/* Forensic Theory Modal */}
       {showDocs && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-2xl w-full p-6 text-slate-200 shadow-2xl overflow-y-auto max-h-[90vh]">
