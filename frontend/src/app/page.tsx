@@ -98,7 +98,7 @@ export default function ForensicWorkstationPage() {
   }, [refreshDatabases]);
 
   // Quick download a specific year from Zenodo
-  const handleQuickDownloadYear = async (year: number) => {
+  const handleQuickDownloadYearMonth = async (year: number, month: number) => {
     setIsDownloadingYear(true);
     showNotification("info", `Connecting to Zenodo & ingesting ${year} grid data...`);
     try {
@@ -107,7 +107,7 @@ export default function ForensicWorkstationPage() {
         catalog_id: catalogId,
         scope: "month",
         target_year: year,
-        target_month: 11,
+        target_month: month,
         nominal_hz: nominalGrid,
       });
       await refreshDatabases();
@@ -250,7 +250,7 @@ export default function ForensicWorkstationPage() {
               onOpenUploadModal={() => setUploadModalOpen(true)}
               onRunFullForensicAnalysis={handleRunFullForensicAnalysis}
               isAnalyzing={isAnalyzing}
-              onQuickDownloadYear={handleQuickDownloadYear}
+              onQuickDownloadYearMonth={handleQuickDownloadYearMonth}
               isDownloadingYear={isDownloadingYear}
             />
           </div>

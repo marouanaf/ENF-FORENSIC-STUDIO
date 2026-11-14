@@ -37,7 +37,7 @@ interface ConfigPanelProps {
   onOpenUploadModal: () => void;
   onRunFullForensicAnalysis: () => void;
   isAnalyzing: boolean;
-  onQuickDownloadYear: (year: number) => void;
+  onQuickDownloadYearMonth: (year: number, month: number) => void;
   isDownloadingYear: boolean;
 }
 
@@ -59,18 +59,32 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
   onOpenUploadModal,
   onRunFullForensicAnalysis,
   isAnalyzing,
-  onQuickDownloadYear,
+  onQuickDownloadYearMonth,
   isDownloadingYear,
 }) => {
-  const [selectedYear, setSelectedYear] = useState<number>(2017);
+  const [selectedYear, setSelectedYear] = useState<number>(2026);
+  const [selectedMonth, setSelectedMonth] = useState<number>(11);
   const targetFreq = nominalGrid * harmonicMultiplier;
 
-  // Check if selectedYear is available in databases
+  const monthStr = String(selectedMonth).padStart(2, "0");
+
+  // Check if selected Year and Month is available in databases
   const matchingDb = databases.find(
+    (d) =>
+      (d.filename.includes(`${selectedYear}-${monthStr}`) ||
+       d.filename.includes(`${selectedYear}_m${monthStr}`) ||
+       d.start_time_utc?.startsWith(`${selectedYear}-${monthStr}`))
+  ) || databases.find(
     (d) =>
       d.filename.includes(String(selectedYear)) ||
       d.start_time_utc?.startsWith(String(selectedYear))
   );
+
+  const monthNames = [
+    "01 - January", "02 - February", "03 - March", "04 - April",
+    "05 - May", "06 - June", "07 - July", "08 - August",
+    "09 - September", "10 - October", "11 - November", "12 - December"
+  ];
 
   return (
     <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-5 shadow-xl space-y-5">
@@ -122,12 +136,12 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
         </div>
       </div>
 
-      {/* 2. Choose Historical Grid by Year & Auto-Download */}
+      {/* 2. Choose Historical Grid by Year & Month */}
       <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800/80 space-y-2.5">
         <div className="flex items-center justify-between">
           <label className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
             <Calendar className="w-3.5 h-3.5 text-cyan-400" />
-            <span>2. Choose Historical Grid by Year</span>
+            <span>2. Historical Grid Year & Month</span>
           </label>
           <button
             onClick={onOpenUploadModal}
@@ -153,7 +167,10 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                 onClick={() => {
                   setSelectedYear(year);
                   const db = databases.find(
-                    (d) => d.filename.includes(String(year)) || d.start_time_utc?.startsWith(String(year))
+                    (d) =>
+                      d.filename.includes(`${year}-${monthStr}`) ||
+                      d.filename.includes(String(year)) ||
+                      d.start_time_utc?.startsWith(String(year))
                   );
                   if (db) setSelectedDatabaseId(db.database_id);
                 }}
@@ -172,29 +189,56 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
           })}
         </div>
 
-        {/* Year Status & Inline Download Button */}
+        {/* Month Dropdown Selector for the Year */}
+        <div className="flex items-center justify-between gap-2 pt-1 text-[11px] font-mono">
+          <span className="text-slate-400">Month:</span>
+          <select
+            value={selectedMonth}
+            onChange={(e) => {
+              const m = parseInt(e.target.value);
+              setSelectedMonth(m);
+              const mPad = String(m).padStart(2, "0");
+              const db = databases.find(
+                (d) =>
+                  d.filename.includes(`${selectedYear}-${mPad}`) ||
+                  d.filename.includes(`${selectedYear}_m${mPad}`) ||
+                  d.start_time_utc?.startsWith(`${selectedYear}-${mPad}`)
+              );
+              if (db) setSelectedDatabaseId(db.database_id);
+            }}
+            className="flex-1 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-cyan-500 cursor-pointer"
+          >
+            {monthNames.map((name, idx) => (
+              <option key={idx + 1} value={idx + 1}>
+                {name} {selectedYear === 2026 && idx === 10 ? "(Preloaded)" : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Year/Month Status & Quick Download Button */}
         <div className="flex items-center justify-between text-[11px] font-mono pt-1">
           {matchingDb ? (
-            <div className="text-emerald-400 flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Year {selectedYear} Ingested & Ready ({matchingDb.row_count.toLocaleString()}s)</span>
+            <div className="text-emerald-400 flex items-center gap-1.5 truncate">
+              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">{matchingDb.filename} ({matchingDb.row_count.toLocaleString()}s)</span>
             </div>
           ) : (
             <div className="text-amber-300 flex items-center justify-between w-full">
-              <span>Year {selectedYear} not downloaded yet</span>
+              <span>{selectedYear}-{monthStr} not in database</span>
               <button
-                onClick={() => onQuickDownloadYear(selectedYear)}
+                onClick={() => onQuickDownloadYearMonth(selectedYear, selectedMonth)}
                 disabled={isDownloadingYear}
-                className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-semibold flex items-center gap-1 shadow cursor-pointer disabled:opacity-40"
+                className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-semibold flex items-center gap-1 shadow cursor-pointer disabled:opacity-40"
               >
                 {isDownloadingYear ? <RefreshCw className="w-3 h-3 animate-spin" /> : <CloudDownload className="w-3 h-3" />}
-                <span>Auto-Download {selectedYear} Grid</span>
+                <span>Ingest {selectedYear}-{monthStr}</span>
               </button>
             </div>
           )}
         </div>
 
-        {/* Database Dropdown */}
+        {/* All Loaded Databases Dropdown */}
         <select
           value={selectedDatabaseId}
           onChange={(e) => setSelectedDatabaseId(e.target.value)}
@@ -281,7 +325,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
           <span>
             {isAnalyzing
               ? "Running Multi-Modal DSP & FFT Correlation..."
-              : `⚡ Authenticate Video Against ${selectedYear} Grid (1-Click)`}
+              : `⚡ Authenticate Video Against ${selectedYear}-${monthStr} Grid (1-Click)`}
           </span>
         </button>
       </div>

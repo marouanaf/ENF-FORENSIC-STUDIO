@@ -379,7 +379,7 @@ def auto_download_and_ingest_zenodo(
 
     year = item.get("year", target_year)
     download_url = item.get("download_url")
-    db_id = f"auto_{catalog_id}_{year}_{scope}"
+    db_id = f"auto_{catalog_id}_{year}_m{target_month:02d}_{scope}" if scope == "month" else f"auto_{catalog_id}_{year}_{scope}"
     parquet_path = os.path.join(output_dir, f"{db_id}.parquet")
 
     # If already downloaded and cached, return immediately
