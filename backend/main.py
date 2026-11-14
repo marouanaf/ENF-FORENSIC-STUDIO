@@ -112,8 +112,24 @@ def init_default_databases():
             "start_time_utc": df_2018["timestamp_utc"].iloc[0],
             "end_time_utc": df_2018["timestamp_utc"].iloc[-1],
             "nominal_grid_hz": 50.0,
-            "description": "Continental Europe & Morocco ONEE Synchronous Grid (September 2018)"
+            "description": "Continental Europe & Morocco ONEE Synchronous Grid (September 2018 - Real TransnetBW)"
         }
+
+        # 2b. 2018 Full Year TransnetBW
+        db_id_2018_full = "morocco_onee_2018_full_year"
+        path_2018_full = os.path.join(DATABASE_DIR, f"{db_id_2018_full}.parquet")
+        if os.path.exists(path_2018_full):
+            df_2018_full = pd.read_parquet(path_2018_full)
+            database_registry[db_id_2018_full] = {
+                "database_id": db_id_2018_full,
+                "filename": "ENTSO-E_Morocco_ONEE_2018_Full_Year_50Hz.parquet",
+                "path": path_2018_full,
+                "row_count": len(df_2018_full),
+                "start_time_utc": df_2018_full["timestamp_utc"].iloc[0],
+                "end_time_utc": df_2018_full["timestamp_utc"].iloc[-1],
+                "nominal_grid_hz": 50.0,
+                "description": "Continental Europe & Morocco ONEE 2018 Full Year (Real TransnetBW 31.5M s)"
+            }
 
         # 3. 2026 Continental Europe & Morocco ONEE Active Grid (November 2026 Month - 2.59M seconds)
         db_id_2026 = "morocco_onee_2026_11"
