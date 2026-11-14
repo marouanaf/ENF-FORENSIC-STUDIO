@@ -99,6 +99,8 @@ export async function matchDatabase(params: {
   media_id?: string;
   query_enf?: number[];
   database_id?: string;
+  database_ids?: string[];
+  years?: number[];
   top_k?: number;
   min_separation_sec?: number;
 }): Promise<MatchResponse> {
@@ -109,6 +111,8 @@ export async function matchDatabase(params: {
       media_id: params.media_id,
       query_enf: params.query_enf,
       database_id: params.database_id,
+      database_ids: params.database_ids,
+      years: params.years,
       top_k: params.top_k ?? 5,
       min_separation_sec: params.min_separation_sec ?? 300,
     }),

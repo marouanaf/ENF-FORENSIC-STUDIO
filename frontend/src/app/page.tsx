@@ -6,6 +6,7 @@ import { MediaInspector } from "../components/MediaInspector";
 import { ConfigPanel } from "../components/ConfigPanel";
 import { SpectrogramView } from "../components/SpectrogramView";
 import { VerdictBanner } from "../components/VerdictBanner";
+import { YearComparisonChart } from "../components/YearComparisonChart";
 import { DualSignalChart } from "../components/DualSignalChart";
 import { CorrelationCurveChart } from "../components/CorrelationCurveChart";
 import { CandidatesTable } from "../components/CandidatesTable";
@@ -25,13 +26,13 @@ import {
   MatchResponse,
   MediaInfo,
 } from "../lib/types";
-import { AlertCircle, CheckCircle, ShieldCheck, Zap, FileText, Upload, Calendar, Search } from "lucide-react";
+import { AlertCircle, CheckCircle, ShieldCheck, Zap, FileText } from "lucide-react";
 
 export default function ForensicWorkstationPage() {
   // Backend & Databases
   const [backendOnline, setBackendOnline] = useState(false);
   const [databases, setDatabases] = useState<GridDatabaseInfo[]>([]);
-  const [selectedDatabaseId, setSelectedDatabaseId] = useState<string>("");
+  const [selectedDatabaseIds, setSelectedDatabaseIds] = useState<string[]>([]);
 
   // Media & ROI
   const [mediaInfo, setMediaInfo] = useState<MediaInfo | null>(null);
@@ -48,6 +49,7 @@ export default function ForensicWorkstationPage() {
   const [extractionResult, setExtractionResult] = useState<ExtractEnfResponse | null>(null);
   const [matchResult, setMatchResult] = useState<MatchResponse | null>(null);
   const [selectedRank, setSelectedRank] = useState<number>(1);
+  const [activeOverlayDbId, setActiveOverlayDbId] = useState<string>("");
 
   // UI state
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -56,18 +58,18 @@ export default function ForensicWorkstationPage() {
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [notification, setNotification] = useState<{ type: "success" | "error" | "info"; msg: string } | null>(null);
 
-  // Fetch databases list
+  // Fetch databases list and select all by default for multi-year sweep
   const refreshDatabases = useCallback(async () => {
     try {
       const dbs = await fetchDatabases();
       setDatabases(dbs);
-      if (dbs.length > 0 && !selectedDatabaseId) {
-        setSelectedDatabaseId(dbs[0].database_id);
+      if (dbs.length > 0 && selectedDatabaseIds.length === 0) {
+        setSelectedDatabaseIds(dbs.map((d) => d.database_id));
       }
     } catch {
       // ignore
     }
-  }, [selectedDatabaseId]);
+  }, [selectedDatabaseIds.length]);
 
   const showNotification = (type: "success" | "error" | "info", msg: string) => {
     setNotification({ type, msg });
@@ -98,20 +100,20 @@ export default function ForensicWorkstationPage() {
   }, [refreshDatabases]);
 
   // Quick download a specific year from Zenodo
-  const handleQuickDownloadYearMonth = async (year: number, month: number) => {
+  const handleQuickDownloadYear = async (year: number) => {
     setIsDownloadingYear(true);
-    showNotification("info", `Connecting to Zenodo & ingesting ${year} grid data...`);
+    showNotification("info", `Downloading & ingesting Year ${year} grid data...`);
     try {
-      const catalogId = year === 2017 ? "zenodo_2017_morocco" : `zenodo_${year}_ce`;
+      const catalogId = year === 2017 ? "zenodo_2017_morocco" : year === 2026 ? "zenodo_2026_morocco" : `zenodo_${year}_ce`;
       const newDb = await autoDownloadGrid({
         catalog_id: catalogId,
         scope: "month",
         target_year: year,
-        target_month: month,
+        target_month: 11,
         nominal_hz: nominalGrid,
       });
       await refreshDatabases();
-      setSelectedDatabaseId(newDb.database_id);
+      setSelectedDatabaseIds((prev) => [...prev, newDb.database_id]);
       showNotification("success", `✓ Ingested ${year} grid dataset: ${newDb.filename}`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Download failed";
@@ -121,8 +123,8 @@ export default function ForensicWorkstationPage() {
     }
   };
 
-  // Unified Forensic Action: Extract ENF from ANY video & Correlate against chosen Grid Year
-  const handleRunFullForensicAnalysis = async () => {
+  // Multi-Year Forensic Analysis: Extracts ENF & Scans across all selected years simultaneously
+  const handleRunFullForensicAnalysis = async (targetDbIds: string[]) => {
     if (!mediaInfo) {
       showNotification("error", "Please upload or select an audio/video file first.");
       return;
@@ -133,7 +135,7 @@ export default function ForensicWorkstationPage() {
     setMatchResult(null);
 
     try {
-      showNotification("info", `Step 1/2: Extracting ${analysisMode.toUpperCase()} ENF trace from media...`);
+      showNotification("info", `Step 1/2: Extracting ${analysisMode.toUpperCase()} ENF trace with Viterbi inertia tracking...`);
 
       // 1. Extract ENF
       const extRes = await extractEnfMultiModal({
@@ -147,23 +149,28 @@ export default function ForensicWorkstationPage() {
       });
       setExtractionResult(extRes);
 
-      // 2. Correlate against selected database
-      showNotification("info", "Step 2/2: Computing FFT cross-correlation across historical grid database...");
+      // 2. Correlate across all selected years
+      const numDbs = targetDbIds.length;
+      showNotification(
+        "info",
+        `Step 2/2: Computing FFT cross-correlation across ${numDbs} historical grid year(s)...`
+      );
 
       const mRes = await matchDatabase({
         media_id: mediaInfo.media_id,
         query_enf: extRes.trace.normalized_enf,
-        database_id: selectedDatabaseId || undefined,
+        database_ids: targetDbIds,
         top_k: 5,
         min_separation_sec: 300,
       });
 
       setMatchResult(mRes);
       setSelectedRank(1);
+      setActiveOverlayDbId(mRes.database_id || targetDbIds[0]);
 
       showNotification(
         "success",
-        `Forensic matching complete! Best match: ${mRes.best_match.casablanca_time || mRes.best_match.start_timestamp_utc} (r = ${mRes.best_match.pearson_r.toFixed(4)}, RMSE: ${mRes.best_match.rmse_mhz.toFixed(2)} mHz)`
+        `Multi-Year Sweep Complete! Best match found in ${mRes.best_match_timezone?.casablanca_formatted || mRes.best_match.casablanca_time} (r = ${mRes.best_match.pearson_r.toFixed(4)})`
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Forensic analysis failed";
@@ -173,7 +180,7 @@ export default function ForensicWorkstationPage() {
     }
   };
 
-  const activeDbInfo = databases.find((d) => d.database_id === selectedDatabaseId);
+  const activeDbInfo = databases.find((d) => selectedDatabaseIds.includes(d.database_id));
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col bg-grid-forensic">
@@ -208,7 +215,7 @@ export default function ForensicWorkstationPage() {
 
       {/* Main Studio Body */}
       <main className="flex-1 p-4 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
-        {/* Top Section: Media Inspector (Left) + Config Panel (Right) */}
+        {/* Top Section: Media Inspector (Left) + Multi-Year Config Panel (Right) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           <div className="lg:col-span-7 space-y-4">
             <MediaInspector
@@ -217,7 +224,7 @@ export default function ForensicWorkstationPage() {
                 setMediaInfo(info);
                 setExtractionResult(null);
                 setMatchResult(null);
-                showNotification("info", `Loaded: ${info.filename} (${info.duration}s). Ready for forensic analysis.`);
+                showNotification("info", `Loaded: ${info.filename} (${info.duration}s). Ready for multi-year scan.`);
               }}
               roiStart={roiStart}
               roiDuration={roiDuration}
@@ -244,13 +251,13 @@ export default function ForensicWorkstationPage() {
               windowDuration={windowDuration}
               setWindowDuration={setWindowDuration}
               databases={databases}
-              selectedDatabaseId={selectedDatabaseId}
-              setSelectedDatabaseId={setSelectedDatabaseId}
+              selectedDatabaseIds={selectedDatabaseIds}
+              setSelectedDatabaseIds={setSelectedDatabaseIds}
               onRefreshDatabases={refreshDatabases}
               onOpenUploadModal={() => setUploadModalOpen(true)}
               onRunFullForensicAnalysis={handleRunFullForensicAnalysis}
               isAnalyzing={isAnalyzing}
-              onQuickDownloadYearMonth={handleQuickDownloadYearMonth}
+              onQuickDownloadYear={handleQuickDownloadYear}
               isDownloadingYear={isDownloadingYear}
             />
           </div>
@@ -263,10 +270,10 @@ export default function ForensicWorkstationPage() {
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-emerald-400" />
                 <h2 className="text-sm font-bold uppercase tracking-wider text-slate-200">
-                  Forensic Telemetry & Narrowband Visual Proof
+                  Forensic Telemetry & Multi-Year Visual Proof
                 </h2>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 {extractionResult.multi_harmonic_verification?.verified && (
                   <span className="text-xs font-mono px-2.5 py-1 rounded bg-emerald-950/80 border border-emerald-500/60 text-emerald-300 flex items-center gap-1.5 shadow-sm shadow-emerald-950">
                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
@@ -303,17 +310,26 @@ export default function ForensicWorkstationPage() {
                 {/* 1. Verdict Banner */}
                 <VerdictBanner matchResult={matchResult} />
 
-                {/* 2. Dual-Signal Overlay Chart */}
+                {/* 2. Multi-Year Comparative Leaderboard (shows how the winning year stands out!) */}
+                {matchResult.year_comparison && matchResult.year_comparison.length > 1 && (
+                  <YearComparisonChart
+                    yearComparison={matchResult.year_comparison}
+                    selectedDbId={activeOverlayDbId}
+                    onSelectYearDb={(dbId) => setActiveOverlayDbId(dbId)}
+                  />
+                )}
+
+                {/* 3. Dual-Signal Overlay Chart */}
                 <DualSignalChart data={matchResult.best_match_overlay} />
 
-                {/* 3. Sliding Correlation Spike Curve (Exact Match Peak Default) */}
+                {/* 4. Sliding Correlation Spike Curve (Exact Match Peak Default) */}
                 <CorrelationCurveChart
                   data={matchResult.correlation_curve_zoomed || matchResult.correlation_curve}
                   globalData={matchResult.correlation_curve_global}
                   bestIndex={matchResult.best_match.start_index}
                 />
 
-                {/* 4. Top 5 Candidates Table */}
+                {/* 5. Top 5 Candidates Table across all scanned years */}
                 <CandidatesTable
                   candidates={matchResult.top_candidates}
                   selectedRank={selectedRank}
@@ -331,7 +347,7 @@ export default function ForensicWorkstationPage() {
         onClose={() => setUploadModalOpen(false)}
         onGridUploaded={(newDb) => {
           refreshDatabases();
-          setSelectedDatabaseId(newDb.database_id);
+          setSelectedDatabaseIds((prev) => [...prev, newDb.database_id]);
           showNotification("success", `Ingested Parquet grid: ${newDb.filename}`);
         }}
       />

@@ -148,6 +148,8 @@ class MatchDatabaseRequest(BaseModel):
     media_id: Optional[str] = None
     query_enf: Optional[List[float]] = None
     database_id: Optional[str] = None
+    database_ids: Optional[List[str]] = None
+    years: Optional[List[int]] = None
     top_k: int = 5
     min_separation_sec: int = 300
 
@@ -404,28 +406,99 @@ def match_database(req: MatchDatabaseRequest):
     if not query_enf or len(query_enf) < 10:
         raise HTTPException(status_code=400, detail="Query ENF trace must have at least 10 seconds of measurements.")
 
-    # Resolve database
-    db_id = req.database_id
-    if not db_id or db_id not in database_registry:
+    # Resolve databases to scan (single or multiple years/databases)
+    target_db_ids = []
+    if req.database_ids and len(req.database_ids) > 0:
+        target_db_ids = [d for d in req.database_ids if d in database_registry]
+    elif req.years and len(req.years) > 0:
+        for y in req.years:
+            for d_id, d_info in database_registry.items():
+                if str(y) in d_info["filename"] or d_info.get("start_time_utc", "").startswith(str(y)):
+                    if d_id not in target_db_ids:
+                        target_db_ids.append(d_id)
+    elif req.database_id and req.database_id in database_registry:
+        target_db_ids = [req.database_id]
+
+    if not target_db_ids:
         if not database_registry:
             init_default_databases()
-        db_id = next(iter(database_registry))
-
-    db_info = database_registry[db_id]
+        target_db_ids = [next(iter(database_registry))]
 
     try:
-        match_result = engine.match_against_grid_parquet(
-            query_enf=query_enf,
-            parquet_path_or_df=db_info["path"],
-            top_k=req.top_k,
-            min_separation_sec=req.min_separation_sec
-        )
-        match_result["database_id"] = db_id
-        match_result["database_filename"] = db_info["filename"]
-        match_result["database_description"] = db_info.get("description", "")
-        return match_result
+        if len(target_db_ids) == 1:
+            db_id = target_db_ids[0]
+            db_info = database_registry[db_id]
+            match_result = engine.match_against_grid_parquet(
+                query_enf=query_enf,
+                parquet_path_or_df=db_info["path"],
+                top_k=req.top_k,
+                min_separation_sec=req.min_separation_sec
+            )
+            match_result["database_id"] = db_id
+            match_result["database_filename"] = db_info["filename"]
+            match_result["database_description"] = db_info.get("description", "")
+            return match_result
+
+        # Multi-Year Scanning Loop
+        year_comparison = []
+        all_candidates = []
+        best_overall_res = None
+        highest_r = -2.0
+
+        for d_id in target_db_ids:
+            d_info = database_registry[d_id]
+            m_res = engine.match_against_grid_parquet(
+                query_enf=query_enf,
+                parquet_path_or_df=d_info["path"],
+                top_k=req.top_k,
+                min_separation_sec=req.min_separation_sec
+            )
+            best_c = m_res["best_match"]
+
+            yr = 2026
+            for y_cand in [2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2026]:
+                if str(y_cand) in d_info["filename"]:
+                    yr = y_cand
+                    break
+
+            year_comparison.append({
+                "year": yr,
+                "database_id": d_id,
+                "filename": d_info["filename"],
+                "peak_r": best_c["pearson_r"],
+                "rmse_mhz": best_c["rmse_mhz"],
+                "matched_casablanca_time": best_c["casablanca_time"],
+                "matched_utc": best_c["start_timestamp_utc"],
+                "verdict": m_res["verdict"],
+                "is_winner": False
+            })
+
+            for c in m_res["top_candidates"]:
+                c_copy = dict(c)
+                c_copy["database_id"] = d_id
+                c_copy["year"] = yr
+                all_candidates.append(c_copy)
+
+            if best_c["pearson_r"] > highest_r:
+                highest_r = best_c["pearson_r"]
+                best_overall_res = m_res
+                best_overall_res["database_id"] = d_id
+                best_overall_res["database_filename"] = d_info["filename"]
+                best_overall_res["database_description"] = d_info.get("description", "")
+
+        for yc in year_comparison:
+            if yc["database_id"] == best_overall_res["database_id"]:
+                yc["is_winner"] = True
+
+        all_candidates.sort(key=lambda x: x["pearson_r"], reverse=True)
+        for rank, c in enumerate(all_candidates[:req.top_k], 1):
+            c["rank"] = rank
+
+        best_overall_res["top_candidates"] = all_candidates[:req.top_k]
+        best_overall_res["year_comparison"] = sorted(year_comparison, key=lambda x: x["peak_r"], reverse=True)
+        return best_overall_res
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Database matching failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Multi-year database matching failed: {str(e)}")
 
 
 @app.post("/api/demo-synthetic-test")

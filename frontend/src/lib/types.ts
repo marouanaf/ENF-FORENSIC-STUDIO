@@ -1,3 +1,14 @@
+export interface YearComparisonItem {
+  year: number;
+  database_id: string;
+  filename: string;
+  peak_r: number;
+  rmse_mhz: number;
+  matched_casablanca_time: string;
+  matched_utc: string;
+  verdict: string;
+  is_winner: boolean;
+}
 export type EnfAnalysisMode = "acoustic" | "optical" | "auto_fusion";
 
 export interface MediaInfo {
@@ -126,6 +137,7 @@ export interface MatchResponse {
   correlation_curve: CorrelationPoint[];
   correlation_curve_zoomed?: CorrelationPoint[];
   correlation_curve_global?: CorrelationPoint[];
+  year_comparison?: YearComparisonItem[];
   search_window_seconds: number;
   database_total_seconds: number;
   noise_floor_mu: number;
