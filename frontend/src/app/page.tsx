@@ -12,6 +12,7 @@ import { CorrelationCurveChart } from "../components/CorrelationCurveChart";
 import { CandidatesTable } from "../components/CandidatesTable";
 import { UploadGridModal } from "../components/UploadGridModal";
 import { EvidenceReportModal } from "../components/EvidenceReportModal";
+import { TriHarmonicVerificationCard } from "../components/TriHarmonicVerificationCard";
 import {
   autoDownloadGrid,
   checkHealth,
@@ -298,6 +299,14 @@ export default function ForensicWorkstationPage() {
                 )}
               </div>
             </div>
+
+            {/* Multi-Harmonic Consensus Telemetry (f1, f2, f4) */}
+            {extractionResult.multi_harmonic_verification && (
+              <TriHarmonicVerificationCard
+                data={extractionResult.multi_harmonic_verification}
+                nominalGridHz={nominalGrid}
+              />
+            )}
 
             {/* Spectrogram Preview */}
             <SpectrogramView

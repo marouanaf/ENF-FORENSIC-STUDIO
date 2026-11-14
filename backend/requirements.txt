@@ -8,3 +8,4 @@ pandas>=2.1.0
 polars>=1.0.0
 soundfile>=0.12.1
 pyarrow>=14.0.0
+opencv-python-headless>=4.8.0

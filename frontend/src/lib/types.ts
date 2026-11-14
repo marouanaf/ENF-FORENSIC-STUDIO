@@ -2,7 +2,9 @@ export interface YearComparisonItem {
   year: number;
   database_id: string;
   filename: string;
+  forensic_score?: number;
   peak_r: number;
+  diff_r?: number;
   rmse_mhz: number;
   matched_gmt?: string;
   matched_casablanca_time: string;
@@ -10,6 +12,7 @@ export interface YearComparisonItem {
   verdict: string;
   is_winner: boolean;
 }
+
 export type EnfAnalysisMode = "acoustic" | "optical" | "auto_fusion";
 
 export interface MediaInfo {
@@ -74,7 +77,7 @@ export interface ExtractEnfResponse {
   selected_modality?: "acoustic" | "optical";
   modality_rationale?: string;
   nominal_grid_hz: number;
-  harmonic_multiplier: number;
+  harmonic_multiplier: number | string;
   target_freq_hz: number;
   start_sec: number;
   duration_sec: number;
@@ -147,12 +150,14 @@ export interface CorrelationPoint {
   gmt_time?: string;
   casablanca_time?: string;
   pearson_r: number;
+  diff_r?: number;
+  forensic_score?: number;
   mse: number;
   is_best: boolean;
 }
 
 export interface MatchResponse {
-  verdict: "AUTHENTICATED" | "PROBABLE MATCH" | "INCONCLUSIVE" | "UNAUTHENTICATED";
+  verdict: "AUTHENTICATED" | "PROBABLE MATCH" | "SPURIOUS CORRELATION (WRONG YEAR/GRID)" | "UNAUTHENTICATED";
   verdict_badge: string;
   verdict_color: "emerald" | "cyan" | "amber" | "rose";
   confidence_pct: number;
@@ -233,12 +238,23 @@ export interface MultiHarmonicVerification {
   description: string;
   cross_harmonic_r: number;
   mean_discrepancy_mhz: number;
+  h1_snr_db?: number;
   h2_snr_db: number;
   h4_snr_db: number;
+  r_f1_f2?: number;
+  r_f2_f4?: number;
+  r_f1_f4?: number;
+  diff_f1_f2_mhz?: number;
+  diff_f2_f4_mhz?: number;
+  diff_f1_f4_mhz?: number;
+  consensus_mode?: string;
+  fused_trace?: number[];
   comparison_points?: Array<{
     second: number;
+    f1_normalized_hz?: number;
     f2_normalized_hz: number;
     f4_normalized_hz: number;
+    fused_hz?: number;
     diff_mhz: number;
   }>;
 }

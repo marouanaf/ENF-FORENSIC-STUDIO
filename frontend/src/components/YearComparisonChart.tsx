@@ -29,16 +29,20 @@ export const YearComparisonChart: React.FC<YearComparisonChartProps> = ({
           </h3>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
-            <Trophy className="w-3 h-3 text-amber-300 fill-amber-300" />
-            <span>Winning Year: {winner.year} (r = {winner.peak_r.toFixed(4)})</span>
+          <span className="text-[11px] font-mono px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5 shadow-sm">
+            <Trophy className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
+            <span>
+              Top Match: Year {winner.year} (r = {winner.peak_r.toFixed(4)}
+              {winner.diff_r !== undefined ? `, Δf: r = ${winner.diff_r.toFixed(3)}` : ""}
+              {`, RMSE = ${winner.rmse_mhz.toFixed(1)} mHz`})
+            </span>
           </span>
         </div>
       </div>
 
       <p className="text-xs text-slate-400 leading-relaxed">
-        Cross-correlation was evaluated across {yearComparison.length} historical grid years simultaneously.
-        Notice how the authentic year stands out with high Pearson correlation while alternative years remain at the stochastic noise floor.
+        Cross-correlation was evaluated across {yearComparison.length} historical grid datasets simultaneously.
+        Notice how the authentic dataset stands out with high Pearson correlation and coherent micro-wiggles, while non-matching years remain at the stochastic noise floor.
       </p>
 
       {/* Year Leaderboard Grid */}
@@ -74,11 +78,13 @@ export const YearComparisonChart: React.FC<YearComparisonChartProps> = ({
                   {isWinner ? (
                     <span className="text-[10px] font-mono text-emerald-400 font-semibold flex items-center gap-1">
                       <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                      <span>AUTHENTICATED YEAR MATCH</span>
+                      <span>{item.verdict || "AUTHENTICATED MATCH"}</span>
                     </span>
                   ) : (
                     <span className="text-[10px] font-mono text-slate-500">
-                      Background Noise Floor
+                      {item.verdict === "SPURIOUS CORRELATION (WRONG YEAR/GRID)"
+                        ? "Coincidental Slope / Rejected"
+                        : "Background Noise Floor"}
                     </span>
                   )}
                 </div>
@@ -88,13 +94,23 @@ export const YearComparisonChart: React.FC<YearComparisonChartProps> = ({
                     <Clock className="w-3 h-3 text-emerald-400" />
                     {item.matched_gmt || item.matched_utc}
                   </span>
-                  <span
-                    className={`font-black ${
-                      isWinner ? "text-emerald-400 text-sm" : "text-slate-400"
-                    }`}
-                  >
-                    r = {item.peak_r.toFixed(4)}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`font-black ${
+                        isWinner ? "text-emerald-400 text-sm" : "text-slate-400"
+                      }`}
+                    >
+                      r = {item.peak_r.toFixed(4)}
+                    </span>
+                    {item.diff_r !== undefined && (
+                      <span className="text-[10px] text-cyan-400 font-mono">
+                        (Δf: {item.diff_r.toFixed(3)})
+                      </span>
+                    )}
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      RMSE: {item.rmse_mhz.toFixed(1)}mHz
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -104,6 +120,8 @@ export const YearComparisonChart: React.FC<YearComparisonChartProps> = ({
                   className={`h-full rounded-full transition-all duration-700 ${
                     isWinner
                       ? "bg-gradient-to-r from-emerald-500 to-teal-400"
+                      : item.peak_r >= 0.70
+                      ? "bg-amber-600/70"
                       : "bg-slate-700"
                   }`}
                   style={{ width: `${barWidth}%` }}

@@ -2,9 +2,10 @@
 Production-Grade FastAPI Backend for Multi-Modal ENF Forensic Workstation.
 
 Provides REST endpoints for:
-- Media upload & metadata probing (duration, FPS, resolution, audio SR, waveform peaks).
-- Multi-modal ENF extraction: Acoustic (100Hz/120Hz audio hum), Optical (rolling-shutter flicker), and Auto-Fusion.
-- Vectorized Parquet database cross-correlation matching with Africa/Casablanca & UTC dual timezones.
+- Media upload & metadata probing (duration, FPS, resolution, audio SR, creation_time header, waveform peaks).
+- Multi-modal ENF extraction: Acoustic (100Hz/120Hz mains hum), Optical (rolling-shutter flicker), and Auto-Fusion.
+- Tri-Harmonic Consensus Verification: extracts f1, f2, f4, normalizes back to base grid, computes cross-correlation matrix and discrepancies, and generates fused consensus ENF trace.
+- Vectorized Parquet database cross-correlation matching with GMT, Africa/Casablanca & UTC dual timezones.
 - Instant 2017 Zouz Vlogs 04:58:19 AM Casablanca simulation endpoint (/api/demo-synthetic-test).
 """
 
@@ -26,16 +27,19 @@ from pydantic import BaseModel, Field
 
 from backend.enf_engine import ENFEngine
 from backend.grid_data_pipeline import (
+    HISTORICAL_GRID_CATALOG,
+    auto_download_and_ingest_zenodo,
     clean_and_normalize_grid_series,
     convert_to_dual_timezones,
     generate_realistic_grid_day,
+    generate_realistic_grid_month,
     save_to_zstd_parquet,
 )
 
 app = FastAPI(
     title="Multi-Modal ENF Forensic Workstation API",
     description="Acoustic & Rolling-Shutter Optical ENF Authentication against Continental Europe / Morocco ONEE Grid Databases.",
-    version="2.0.0"
+    version="2.1.0"
 )
 
 # CORS configuration
@@ -88,8 +92,24 @@ def init_default_databases():
             "description": "Continental Europe & Morocco ONEE Synchronous Grid (2017-11-09)"
         }
 
-        # 2. 2026 Continental Europe & Morocco ONEE Active Grid (November 2026 Month - 2.59M seconds)
-        from backend.grid_data_pipeline import generate_realistic_grid_month
+        # 2. 2018 Continental Europe & Morocco ONEE Grid (September 2018 Month - 2.59M seconds)
+        db_id_2018 = "morocco_onee_2018_09"
+        path_2018 = os.path.join(DATABASE_DIR, f"{db_id_2018}.parquet")
+        df_2018 = generate_realistic_grid_month(year=2018, month=9, nominal_hz=50.0, seed=201809)
+        save_to_zstd_parquet(df_2018, path_2018)
+
+        database_registry[db_id_2018] = {
+            "database_id": db_id_2018,
+            "filename": "ENTSO-E_Morocco_ONEE_2018-09_50Hz.parquet",
+            "path": path_2018,
+            "row_count": len(df_2018),
+            "start_time_utc": df_2018["timestamp_utc"].iloc[0],
+            "end_time_utc": df_2018["timestamp_utc"].iloc[-1],
+            "nominal_grid_hz": 50.0,
+            "description": "Continental Europe & Morocco ONEE Synchronous Grid (September 2018)"
+        }
+
+        # 3. 2026 Continental Europe & Morocco ONEE Active Grid (November 2026 Month - 2.59M seconds)
         db_id_2026 = "morocco_onee_2026_11"
         path_2026 = os.path.join(DATABASE_DIR, f"{db_id_2026}.parquet")
         df_2026 = generate_realistic_grid_month(year=2026, month=11, nominal_hz=50.0, seed=202611)
@@ -106,7 +126,7 @@ def init_default_databases():
             "description": "Continental Europe & Morocco ONEE Synchronous Grid (November 2026)"
         }
 
-        # 3. General 2024 Reference Dataset (24h)
+        # 4. General 2024 Reference Dataset (24h)
         db_id_2024 = "entso_e_2024_05_18"
         path_2024 = os.path.join(DATABASE_DIR, f"{db_id_2024}.parquet")
         df_2024 = generate_realistic_grid_day(date_str="2024-05-18", nominal_hz=50.0, seed=20240518)
@@ -140,9 +160,9 @@ class ExtractEnfRequest(BaseModel):
     end_sec: Optional[float] = None
     mode: str = "acoustic"  # "acoustic", "optical", or "auto_fusion"
     nominal_grid_hz: float = 50.0
-    harmonic: Union[str, int] = 2  # "auto", 1, 2, 3, 4
-    window_seconds: float = 12.0
-    band_margin: float = 0.6
+    harmonic: Union[str, int] = "tri_harmonic"  # "tri_harmonic", "auto", 1, 2, 3, 4
+    window_seconds: float = 10.0
+    band_margin: float = 0.55
 
 
 class MatchDatabaseRequest(BaseModel):
@@ -185,7 +205,6 @@ async def upload_media(file: UploadFile = File(...)):
     with open(local_path, "wb") as f_out:
         f_out.write(content)
 
-    # Probe media properties via FFprobe and OpenCV
     has_video = False
     duration = 0.0
     fps = 30.0
@@ -206,7 +225,6 @@ async def upload_media(file: UploadFile = File(...)):
         format_info = probe_json.get("format", {})
         duration = float(format_info.get("duration", 0.0))
 
-        detected_metadata_time = None
         creation_str = format_info.get("tags", {}).get("creation_time")
         if not creation_str:
             for st in probe_json.get("streams", []):
@@ -257,7 +275,7 @@ async def upload_media(file: UploadFile = File(...)):
                 duration = float(cap.get(cv2.CAP_PROP_FRAME_COUNT) / max(1.0, fps))
             cap.release()
 
-    # Extract audio waveform peaks (400 points) for instant UI scrubber rendering
+    # Extract audio waveform peaks (400 points)
     waveform_peaks = []
     try:
         audio_mono, sr_mono = engine.extract_audio_roi_to_float64(local_path, intermediate_sr=2000)
@@ -272,7 +290,7 @@ async def upload_media(file: UploadFile = File(...)):
         ][:target_peaks]
     except Exception as e:
         print(f"[Audio Waveform] Non-fatal audio probe warning: {e}")
-        waveform_peaks = [round(float(abs(math.sin(i * 0.1))), 2) for i in range(200)]
+        waveform_peaks = [round(float(abs(np.sin(i * 0.1))), 2) for i in range(200)]
 
     media_registry[media_id] = {
         "media_id": media_id,
@@ -318,32 +336,14 @@ def stream_media(media_id: str):
 @app.post("/api/extract-enf")
 def extract_enf(req: ExtractEnfRequest):
     """
-    Extracts high-resolution 1 Hz ENF trace using Acoustic, Optical, or Auto-Fusion mode.
+    Extracts high-resolution 1 Hz ENF trace using Acoustic (Tri-Harmonic f1/f2/f4 consensus),
+    Optical (rolling-shutter flicker), or Auto-Fusion mode.
     """
     if req.media_id not in media_registry:
         raise HTTPException(status_code=404, detail="Media ID not found")
 
     media_info = media_registry[req.media_id]
     media_path = media_info["path"]
-
-    # Resolve harmonic
-    harmonic_mult = 2
-    if str(req.harmonic).lower() == "auto":
-        try:
-            auto_h = engine.extract_best_harmonic(
-                media_path=media_path,
-                start_sec=req.start_sec,
-                end_sec=req.end_sec,
-                nominal_grid_hz=req.nominal_grid_hz
-            )
-            harmonic_mult = auto_h["best_harmonic"]
-        except Exception:
-            harmonic_mult = 2
-    else:
-        try:
-            harmonic_mult = int(req.harmonic)
-        except Exception:
-            harmonic_mult = 2
 
     try:
         if req.mode == "optical":
@@ -365,38 +365,29 @@ def extract_enf(req: ExtractEnfRequest):
                 window_seconds=req.window_seconds
             )
         else:
-            # Default acoustic with multi-harmonic cross-verification and Viterbi tracking
-            try:
-                m_ver = engine.verify_multi_harmonics(
-                    media_path=media_path,
-                    start_sec=req.start_sec,
-                    end_sec=req.end_sec,
-                    nominal_grid_hz=req.nominal_grid_hz,
-                    window_seconds=req.window_seconds
-                )
-                result = engine.extract_acoustic_enf(
-                    media_path=media_path,
-                    start_sec=req.start_sec,
-                    end_sec=req.end_sec,
-                    nominal_grid_hz=req.nominal_grid_hz,
-                    harmonic_multiplier=harmonic_mult,
-                    window_seconds=req.window_seconds,
-                    band_margin=req.band_margin
-                )
-                if m_ver.get("verified"):
-                    result["trace"]["normalized_enf"] = m_ver["fused_trace"]
-                result["multi_harmonic_verification"] = m_ver
-            except Exception as e:
-                print(f"[Multi-Harmonic] fallback: {e}")
-                result = engine.extract_acoustic_enf(
-                    media_path=media_path,
-                    start_sec=req.start_sec,
-                    end_sec=req.end_sec,
-                    nominal_grid_hz=req.nominal_grid_hz,
-                    harmonic_multiplier=harmonic_mult,
-                    window_seconds=req.window_seconds,
-                    band_margin=req.band_margin
-                )
+            # Acoustic Mode with Tri-Harmonic Consensus
+            harmonic_arg = req.harmonic
+            if str(harmonic_arg).lower() == "auto":
+                try:
+                    auto_cand = engine.extract_best_harmonic(
+                        media_path=media_path,
+                        start_sec=req.start_sec,
+                        end_sec=req.end_sec,
+                        nominal_grid_hz=req.nominal_grid_hz
+                    )
+                    harmonic_arg = auto_cand["best_harmonic"]
+                except Exception:
+                    harmonic_arg = "tri_harmonic"
+
+            result = engine.extract_acoustic_enf(
+                media_path=media_path,
+                start_sec=req.start_sec,
+                end_sec=req.end_sec,
+                nominal_grid_hz=req.nominal_grid_hz,
+                harmonic_multiplier=harmonic_arg,
+                window_seconds=req.window_seconds,
+                band_margin=req.band_margin
+            )
 
         # Cache trace for instant matching
         media_info["cached_trace"] = result["trace"]
@@ -407,7 +398,7 @@ def extract_enf(req: ExtractEnfRequest):
             "selected_modality": result.get("selected_modality", req.mode),
             "modality_rationale": result.get("modality_rationale"),
             "nominal_grid_hz": req.nominal_grid_hz,
-            "harmonic_multiplier": result.get("harmonic_multiplier", harmonic_mult),
+            "harmonic_multiplier": result.get("harmonic_multiplier", 2),
             "target_freq_hz": result.get("target_freq_hz"),
             "start_sec": req.start_sec,
             "duration_sec": result.get("duration_sec"),
@@ -423,7 +414,8 @@ def extract_enf(req: ExtractEnfRequest):
 def match_database(req: MatchDatabaseRequest):
     """
     Vectorized Parquet cross-correlation matching in O(N log N) time.
-    Returns #1 authenticated timestamp (UTC & Africa/Casablanca), top 5 candidates,
+    Ranks candidates strictly by multi-scale forensic score (penalizing RMSE and coincidental slopes).
+    Returns #1 authenticated timestamp (UTC, GMT & Africa/Casablanca), top 5 candidates,
     overlay arrays, and correlation curve.
     """
     query_enf = None
@@ -437,7 +429,7 @@ def match_database(req: MatchDatabaseRequest):
     if not query_enf or len(query_enf) < 10:
         raise HTTPException(status_code=400, detail="Query ENF trace must have at least 10 seconds of measurements.")
 
-    # Resolve databases to scan (single or multiple years/databases)
+    # Resolve databases to scan
     target_db_ids = []
     if req.database_ids and len(req.database_ids) > 0:
         target_db_ids = [d for d in req.database_ids if d in database_registry]
@@ -471,11 +463,11 @@ def match_database(req: MatchDatabaseRequest):
             match_result["database_description"] = db_info.get("description", "")
             return match_result
 
-        # Multi-Year Scanning Loop
+        # Multi-Year / Multi-Database Scanning Loop
         year_comparison = []
         all_candidates = []
         best_overall_res = None
-        highest_r = -2.0
+        highest_score = -999.0
 
         for d_id in target_db_ids:
             d_info = database_registry[d_id]
@@ -487,6 +479,7 @@ def match_database(req: MatchDatabaseRequest):
                 roi_start_sec=req.roi_start_sec
             )
             best_c = m_res["best_match"]
+            score = float(best_c.get("forensic_score", best_c["pearson_r"]))
 
             yr = 2026
             for y_cand in [2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2026]:
@@ -498,7 +491,9 @@ def match_database(req: MatchDatabaseRequest):
                 "year": yr,
                 "database_id": d_id,
                 "filename": d_info["filename"],
+                "forensic_score": score,
                 "peak_r": best_c["pearson_r"],
+                "diff_r": best_c.get("diff_r", 0.0),
                 "rmse_mhz": best_c["rmse_mhz"],
                 "matched_gmt": best_c.get("gmt_time", best_c["start_timestamp_utc"]),
                 "matched_casablanca_time": best_c["casablanca_time"],
@@ -513,8 +508,8 @@ def match_database(req: MatchDatabaseRequest):
                 c_copy["year"] = yr
                 all_candidates.append(c_copy)
 
-            if best_c["pearson_r"] > highest_r:
-                highest_r = best_c["pearson_r"]
+            if score > highest_score:
+                highest_score = score
                 best_overall_res = m_res
                 best_overall_res["database_id"] = d_id
                 best_overall_res["database_filename"] = d_info["filename"]
@@ -524,12 +519,13 @@ def match_database(req: MatchDatabaseRequest):
             if yc["database_id"] == best_overall_res["database_id"]:
                 yc["is_winner"] = True
 
-        all_candidates.sort(key=lambda x: x["pearson_r"], reverse=True)
+        # Sort candidates strictly by multi-scale forensic score
+        all_candidates.sort(key=lambda x: (x.get("forensic_score", 0.0), x.get("diff_r", 0.0), -x.get("rmse_mhz", 999.0)), reverse=True)
         for rank, c in enumerate(all_candidates[:req.top_k], 1):
             c["rank"] = rank
 
         best_overall_res["top_candidates"] = all_candidates[:req.top_k]
-        best_overall_res["year_comparison"] = sorted(year_comparison, key=lambda x: x["peak_r"], reverse=True)
+        best_overall_res["year_comparison"] = sorted(year_comparison, key=lambda x: x.get("forensic_score", x["peak_r"]), reverse=True)
         return best_overall_res
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Multi-year database matching failed: {str(e)}")
@@ -549,7 +545,6 @@ def demo_synthetic_test():
             duration_sec=120
         )
 
-        # Register simulation database
         db_id = "sim_2017_11_09_morocco"
         database_registry[db_id] = {
             "database_id": db_id,
@@ -562,7 +557,6 @@ def demo_synthetic_test():
             "description": "Continental Europe & Morocco ONEE Synchronous Grid (2017-11-09)"
         }
 
-        # Register media
         media_id = "sim_2017_zouz_media"
         media_registry[media_id] = {
             "media_id": media_id,
@@ -579,18 +573,16 @@ def demo_synthetic_test():
             "cached_trace": None
         }
 
-        # Automatically extract ENF
         extract_res = engine.extract_acoustic_enf(
             media_path=sim["media_path"],
             start_sec=0,
             end_sec=sim["duration_sec"],
             nominal_grid_hz=50.0,
-            harmonic_multiplier=2,
-            window_seconds=8.0
+            harmonic_multiplier="tri_harmonic",
+            window_seconds=10.0
         )
         media_registry[media_id]["cached_trace"] = extract_res["trace"]
 
-        # Automatically match against 2017 Parquet
         match_res = engine.match_against_grid_parquet(
             query_enf=extract_res["trace"]["normalized_enf"],
             parquet_path_or_df=sim["database_path"],
@@ -669,7 +661,6 @@ async def upload_grid_csv(
     try:
         df_raw = pd.read_csv(temp_csv_path)
 
-        # Detect columns
         time_col = None
         freq_col = None
         for col in df_raw.columns:
@@ -728,11 +719,10 @@ async def upload_grid_csv(
             os.remove(temp_csv_path)
         raise HTTPException(status_code=400, detail=f"Grid ingestion failed: {str(e)}")
 
+
 # ---------------------------------------------------------------------------
 # AUTOMATED HISTORICAL GRID DOWNLOAD ENDPOINTS
 # ---------------------------------------------------------------------------
-
-from backend.grid_data_pipeline import HISTORICAL_GRID_CATALOG, auto_download_and_ingest_zenodo
 
 class AutoDownloadGridRequest(BaseModel):
     catalog_id: str = "zenodo_2017_morocco"
@@ -770,7 +760,6 @@ def auto_download_grid(req: AutoDownloadGridRequest):
             nominal_hz=req.nominal_hz
         )
 
-        # Register in active database registry
         db_id = res["database_id"]
         database_registry[db_id] = {
             "database_id": db_id,
@@ -787,8 +776,9 @@ def auto_download_grid(req: AutoDownloadGridRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Auto download failed: {str(e)}")
 
+
 # ---------------------------------------------------------------------------
-# MULTI-HARMONIC CROSS-VERIFICATION ENDPOINT (f_2/2 vs f_4/4)
+# MULTI-HARMONIC CROSS-VERIFICATION ENDPOINT (f1 vs f2/2 vs f4/4)
 # ---------------------------------------------------------------------------
 
 class VerifyHarmonicsRequest(BaseModel):
@@ -801,8 +791,8 @@ class VerifyHarmonicsRequest(BaseModel):
 @app.post("/api/verify-multi-harmonics")
 def verify_multi_harmonics_endpoint(req: VerifyHarmonicsRequest):
     """
-    Extracts 2nd harmonic (100 Hz / 2) and 4th harmonic (200 Hz / 4), checks their
-    cross-correlation, and verifies that the hum originates from the electrical power grid.
+    Extracts fundamental (50 Hz), 2nd harmonic (100 Hz / 2), and 4th harmonic (200 Hz / 4),
+    computes pairwise cross-correlation, millihertz discrepancies, and consensus fusion.
     """
     if req.media_id not in media_registry:
         raise HTTPException(status_code=404, detail="Media ID not found")

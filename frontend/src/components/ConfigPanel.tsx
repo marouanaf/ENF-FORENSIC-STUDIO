@@ -229,21 +229,29 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
       <div className="grid grid-cols-2 gap-3 pt-1">
         {/* Harmonic */}
         <div>
-          <label className="text-xs font-medium text-slate-300 block mb-1">Harmonic Multiplier</label>
-          <div className="grid grid-cols-3 gap-1">
-            {[1, 2, 3].map((k) => (
+          <div className="flex justify-between items-center text-xs text-slate-300 mb-1">
+            <span>Harmonic Target</span>
+            <span className="text-[10px] text-cyan-400 font-mono">f₁, f₂, f₄ Consensus</span>
+          </div>
+          <div className="grid grid-cols-4 gap-1">
+            {[
+              { k: 2, label: "2x (100Hz)" },
+              { k: 4, label: "4x (200Hz)" },
+              { k: 1, label: "1x (50Hz)" },
+              { k: 3, label: "3x (150Hz)" },
+            ].map((item) => (
               <button
-                key={k}
+                key={item.k}
                 type="button"
-                disabled={analysisMode === "optical" && k !== 2}
-                onClick={() => setHarmonicMultiplier(k)}
-                className={`py-1.5 rounded text-xs font-medium border text-center transition-all cursor-pointer disabled:opacity-30 ${
-                  harmonicMultiplier === k
-                    ? "bg-cyan-500/20 text-cyan-300 border-cyan-500"
-                    : "bg-slate-800 text-slate-400 border-slate-700"
+                disabled={analysisMode === "optical" && item.k !== 2}
+                onClick={() => setHarmonicMultiplier(item.k)}
+                className={`py-1.5 rounded text-[11px] font-medium border text-center transition-all cursor-pointer disabled:opacity-30 ${
+                  harmonicMultiplier === item.k
+                    ? "bg-cyan-500/20 text-cyan-300 border-cyan-500 font-bold"
+                    : "bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200"
                 }`}
               >
-                {k}x ({nominalGrid * k}Hz)
+                {item.label}
               </button>
             ))}
           </div>
