@@ -97,7 +97,7 @@ export default function ForensicWorkstationPage() {
       } catch {
         setBackendOnline(false);
       }
-    }, 5000);
+    }, 15000);
     return () => clearInterval(interval);
   }, [refreshDatabases]);
 

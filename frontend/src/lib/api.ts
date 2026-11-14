@@ -7,34 +7,36 @@ import {
   SimulationResult,
 } from "./types";
 
-const BACKEND_DIRECT = "http://127.0.0.1:8000";
+function getDirectBackendBase(): string {
+  if (typeof window === "undefined") {
+    return process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+  }
+  const host = window.location.hostname || "127.0.0.1";
+  return `http://${host}:8000`;
+}
 
 /**
- * Robust API fetcher with automatic fallback to direct backend port
- * to eliminate proxy ECONNRESET and socket hang-ups during streaming or restarts.
+ * Direct-first API fetcher.
+ * Connects directly to FastAPI backend to eliminate Next.js proxy ECONNRESET
+ * and socket hang-up logs during continuous polling or media streaming.
  */
 async function apiFetch(path: string, options?: RequestInit): Promise<Response> {
   const isBrowser = typeof window !== "undefined";
-  const primaryUrl = isBrowser ? path : `${BACKEND_DIRECT}${path}`;
+  const directBase = getDirectBackendBase();
+  const directUrl = `${directBase}${path}`;
 
-  try {
-    const res = await fetch(primaryUrl, options);
-    if (res.status === 502 || res.status === 503 || res.status === 504) {
-      throw new Error(`Proxy error ${res.status}`);
-    }
-    return res;
-  } catch (err) {
-    if (isBrowser) {
-      // Seamless direct fallback to local backend port
-      const directUrl = `${BACKEND_DIRECT}${path}`;
-      try {
-        return await fetch(directUrl, options);
-      } catch {
-        throw err;
+  if (isBrowser) {
+    try {
+      const res = await fetch(directUrl, options);
+      if (res.ok || (res.status !== 502 && res.status !== 503 && res.status !== 504)) {
+        return res;
       }
+    } catch {
+      // Fallback to relative path via Next.js proxy if direct port was unreachable
     }
-    throw err;
   }
+
+  return await fetch(path, options);
 }
 
 export async function checkHealth(): Promise<{ status: string; databases_available: string[] }> {
@@ -60,7 +62,8 @@ export async function uploadMedia(file: File): Promise<MediaInfo> {
 }
 
 export function getMediaStreamUrl(mediaId: string): string {
-  return `/api/media/${mediaId}/stream`;
+  const base = getDirectBackendBase();
+  return `${base}/api/media/${mediaId}/stream`;
 }
 
 export async function extractEnfMultiModal(params: {
