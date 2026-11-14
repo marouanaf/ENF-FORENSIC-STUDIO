@@ -7,11 +7,38 @@ import {
   SimulationResult,
 } from "./types";
 
-// Use same-origin relative URLs in the browser to eliminate CORS & NetworkError across localhost/127.0.0.1/LAN
-const API_BASE = typeof window !== "undefined" ? "" : (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000");
+const BACKEND_DIRECT = "http://127.0.0.1:8000";
+
+/**
+ * Robust API fetcher with automatic fallback to direct backend port
+ * to eliminate proxy ECONNRESET and socket hang-ups during streaming or restarts.
+ */
+async function apiFetch(path: string, options?: RequestInit): Promise<Response> {
+  const isBrowser = typeof window !== "undefined";
+  const primaryUrl = isBrowser ? path : `${BACKEND_DIRECT}${path}`;
+
+  try {
+    const res = await fetch(primaryUrl, options);
+    if (res.status === 502 || res.status === 503 || res.status === 504) {
+      throw new Error(`Proxy error ${res.status}`);
+    }
+    return res;
+  } catch (err) {
+    if (isBrowser) {
+      // Seamless direct fallback to local backend port
+      const directUrl = `${BACKEND_DIRECT}${path}`;
+      try {
+        return await fetch(directUrl, options);
+      } catch {
+        throw err;
+      }
+    }
+    throw err;
+  }
+}
 
 export async function checkHealth(): Promise<{ status: string; databases_available: string[] }> {
-  const res = await fetch(`${API_BASE}/api/health`);
+  const res = await apiFetch("/api/health", { cache: "no-store" });
   if (!res.ok) throw new Error("Backend server unreachable");
   return res.json();
 }
@@ -20,26 +47,10 @@ export async function uploadMedia(file: File): Promise<MediaInfo> {
   const formData = new FormData();
   formData.append("file", file);
 
-  let res: Response;
-  try {
-    res = await fetch("/api/upload-media", {
-      method: "POST",
-      body: formData,
-    });
-    if (res.status === 413 || res.status === 502 || res.status === 504) {
-      throw new Error(`Proxy status ${res.status}`);
-    }
-  } catch {
-    // Seamless fallback to direct backend port if Next.js proxy timed out on large files
-    try {
-      res = await fetch("http://127.0.0.1:8000/api/upload-media", {
-        method: "POST",
-        body: formData,
-      });
-    } catch {
-      throw new Error("Failed to upload media: file transfer interrupted.");
-    }
-  }
+  const res = await apiFetch("/api/upload-media", {
+    method: "POST",
+    body: formData,
+  });
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
@@ -49,7 +60,7 @@ export async function uploadMedia(file: File): Promise<MediaInfo> {
 }
 
 export function getMediaStreamUrl(mediaId: string): string {
-  return `${API_BASE}/api/media/${mediaId}/stream`;
+  return `/api/media/${mediaId}/stream`;
 }
 
 export async function extractEnfMultiModal(params: {
@@ -62,7 +73,7 @@ export async function extractEnfMultiModal(params: {
   window_seconds?: number;
   band_margin?: number;
 }): Promise<ExtractEnfResponse> {
-  const res = await fetch(`${API_BASE}/api/extract-enf`, {
+  const res = await apiFetch("/api/extract-enf", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -72,8 +83,8 @@ export async function extractEnfMultiModal(params: {
       mode: params.mode,
       nominal_grid_hz: params.nominal_grid_hz,
       harmonic: params.harmonic,
-      window_seconds: params.window_seconds ?? 12.0,
-      band_margin: params.band_margin ?? 0.6,
+      window_seconds: params.window_seconds ?? 10.0,
+      band_margin: params.band_margin ?? 0.55,
     }),
   });
 
@@ -85,7 +96,7 @@ export async function extractEnfMultiModal(params: {
 }
 
 export async function fetchDatabases(): Promise<GridDatabaseInfo[]> {
-  const res = await fetch(`${API_BASE}/api/databases`);
+  const res = await apiFetch("/api/databases", { cache: "no-store" });
   if (!res.ok) throw new Error("Failed to list grid databases");
   return res.json();
 }
@@ -100,7 +111,7 @@ export async function uploadGridCsv(
   formData.append("input_tz", inputTz);
   formData.append("nominal_hz", nominalHz.toString());
 
-  const res = await fetch(`${API_BASE}/api/upload-grid-csv`, {
+  const res = await apiFetch("/api/upload-grid-csv", {
     method: "POST",
     body: formData,
   });
@@ -122,7 +133,7 @@ export async function matchDatabase(params: {
   min_separation_sec?: number;
   roi_start_sec?: number;
 }): Promise<MatchResponse> {
-  const res = await fetch(`${API_BASE}/api/match-database`, {
+  const res = await apiFetch("/api/match-database", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -145,7 +156,7 @@ export async function matchDatabase(params: {
 }
 
 export async function run2017ZouzSimulation(): Promise<SimulationResult> {
-  const res = await fetch(`${API_BASE}/api/demo-synthetic-test`, {
+  const res = await apiFetch("/api/demo-synthetic-test", {
     method: "POST",
   });
 
@@ -160,13 +171,13 @@ export async function getAvailableGridDownloads(): Promise<{
   catalog: import("./types").GridCatalogItem[];
   loaded_databases: GridDatabaseInfo[];
 }> {
-  const res = await fetch(`${API_BASE}/api/available-grid-downloads`);
+  const res = await apiFetch("/api/available-grid-downloads", { cache: "no-store" });
   if (!res.ok) throw new Error("Failed to fetch available grid catalog");
   return res.json();
 }
 
 export async function autoDownloadGrid(params: import("./types").AutoDownloadGridParams): Promise<GridDatabaseInfo> {
-  const res = await fetch(`${API_BASE}/api/auto-download-grid`, {
+  const res = await apiFetch("/api/auto-download-grid", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
@@ -185,7 +196,7 @@ export async function verifyMultiHarmonics(params: {
   end_sec?: number;
   nominal_grid_hz: number;
 }): Promise<import("./types").MultiHarmonicVerification> {
-  const res = await fetch(`${API_BASE}/api/verify-multi-harmonics`, {
+  const res = await apiFetch("/api/verify-multi-harmonics", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
