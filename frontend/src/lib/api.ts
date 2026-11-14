@@ -132,3 +132,26 @@ export async function run2017ZouzSimulation(): Promise<SimulationResult> {
   }
   return res.json();
 }
+
+export async function getAvailableGridDownloads(): Promise<{
+  catalog: import("./types").GridCatalogItem[];
+  loaded_databases: GridDatabaseInfo[];
+}> {
+  const res = await fetch(`${API_BASE}/api/available-grid-downloads`);
+  if (!res.ok) throw new Error("Failed to fetch available grid catalog");
+  return res.json();
+}
+
+export async function autoDownloadGrid(params: import("./types").AutoDownloadGridParams): Promise<GridDatabaseInfo> {
+  const res = await fetch(`${API_BASE}/api/auto-download-grid`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Failed to auto-download and ingest grid dataset");
+  }
+  return res.json();
+}

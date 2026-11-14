@@ -157,3 +157,27 @@ export interface SimulationResult {
   };
   match: MatchResponse;
 }
+
+export interface GridCatalogItem {
+  catalog_id: string;
+  title: string;
+  record_id: string;
+  year: number;
+  nominal_grid_hz: number;
+  size_label: string;
+  description: string;
+  recommended?: boolean;
+}
+
+export interface AvailableGridDownloadsResponse {
+  catalog: GridCatalogItem[];
+  loaded_databases: GridDatabaseInfo[];
+}
+
+export interface AutoDownloadGridParams {
+  catalog_id: string;
+  scope: "month" | "day" | "year";
+  target_year: number;
+  target_month: number;
+  nominal_hz: number;
+}

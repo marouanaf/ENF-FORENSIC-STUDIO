@@ -579,3 +579,62 @@ async def upload_grid_csv(
         if os.path.exists(temp_csv_path):
             os.remove(temp_csv_path)
         raise HTTPException(status_code=400, detail=f"Grid ingestion failed: {str(e)}")
+
+# ---------------------------------------------------------------------------
+# AUTOMATED HISTORICAL GRID DOWNLOAD ENDPOINTS
+# ---------------------------------------------------------------------------
+
+from backend.grid_data_pipeline import HISTORICAL_GRID_CATALOG, auto_download_and_ingest_zenodo
+
+class AutoDownloadGridRequest(BaseModel):
+    catalog_id: str = "zenodo_2017_morocco"
+    scope: str = "month"  # "month", "day", or "year"
+    target_year: int = 2017
+    target_month: int = 11
+    nominal_hz: float = 50.0
+
+
+@app.get("/api/available-grid-downloads")
+def get_available_grid_downloads():
+    """
+    Returns the catalog of downloadable historical grid frequency datasets (Zenodo Records 5105820 & 15784548).
+    """
+    return {
+        "catalog": HISTORICAL_GRID_CATALOG,
+        "loaded_databases": list_databases()
+    }
+
+
+@app.post("/api/auto-download-grid")
+def auto_download_grid(req: AutoDownloadGridRequest):
+    """
+    Automated downloader and preprocessor: downloads or generates the historical dataset,
+    normalizes timezones (Europe/Berlin to UTC & Africa/Casablanca), enforces continuous 1Hz index,
+    and compresses to Zstandard Parquet.
+    """
+    try:
+        res = auto_download_and_ingest_zenodo(
+            catalog_id=req.catalog_id,
+            output_dir=DATABASE_DIR,
+            scope=req.scope,
+            target_year=req.target_year,
+            target_month=req.target_month,
+            nominal_hz=req.nominal_hz
+        )
+
+        # Register in active database registry
+        db_id = res["database_id"]
+        database_registry[db_id] = {
+            "database_id": db_id,
+            "filename": res["filename"],
+            "path": res["path"],
+            "row_count": res["row_count"],
+            "start_time_utc": res["start_time_utc"],
+            "end_time_utc": res["end_time_utc"],
+            "nominal_grid_hz": req.nominal_hz,
+            "description": res["description"]
+        }
+
+        return res
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Auto download failed: {str(e)}")
