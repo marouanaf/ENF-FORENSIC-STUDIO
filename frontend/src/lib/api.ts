@@ -155,3 +155,22 @@ export async function autoDownloadGrid(params: import("./types").AutoDownloadGri
   }
   return res.json();
 }
+
+export async function verifyMultiHarmonics(params: {
+  media_id: string;
+  start_sec?: number;
+  end_sec?: number;
+  nominal_grid_hz: number;
+}): Promise<import("./types").MultiHarmonicVerification> {
+  const res = await fetch(`${API_BASE}/api/verify-multi-harmonics`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Multi-harmonic verification failed");
+  }
+  return res.json();
+}

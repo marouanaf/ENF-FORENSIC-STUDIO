@@ -976,3 +976,102 @@ class ENFEngine:
             "waveform_peaks": waveform_peaks,
             "has_video": True
         }
+
+    # -----------------------------------------------------------------------
+    # G. MULTI-HARMONIC CROSS-VERIFICATION (f_2 / 2 vs. f_4 / 4)
+    # -----------------------------------------------------------------------
+
+    def verify_multi_harmonics(
+        self,
+        media_path: str,
+        start_sec: float = 0.0,
+        end_sec: Optional[float] = None,
+        nominal_grid_hz: float = 50.0,
+        window_seconds: float = 8.0
+    ) -> Dict[str, Any]:
+        """
+        Multi-Harmonic Cross-Verification:
+        Extracts both the 2nd harmonic (100 Hz) and 4th harmonic (200 Hz), divides them
+        by 2 and 4 respectively to normalize them back to a 50 Hz base, and checks that
+        both curves correlate (Pearson r) before searching the database.
+        
+        Confirms the signal is genuinely from the power grid rather than a competing
+        mechanical hum (e.g. 98.47 Hz compressor).
+        """
+        from scipy.stats import pearsonr
+
+        # 1. Extract 2nd Harmonic (100 Hz / 2 -> 50 Hz)
+        h2 = self.extract_acoustic_enf(
+            media_path=media_path,
+            start_sec=start_sec,
+            end_sec=end_sec,
+            nominal_grid_hz=nominal_grid_hz,
+            harmonic_multiplier=2,
+            window_seconds=window_seconds
+        )
+        f2_norm = np.array(h2["trace"]["normalized_enf"], dtype=np.float64)
+
+        # 2. Extract 4th Harmonic (200 Hz / 4 -> 50 Hz)
+        h4 = self.extract_acoustic_enf(
+            media_path=media_path,
+            start_sec=start_sec,
+            end_sec=end_sec,
+            nominal_grid_hz=nominal_grid_hz,
+            harmonic_multiplier=4,
+            window_seconds=window_seconds
+        )
+        f4_norm = np.array(h4["trace"]["normalized_enf"], dtype=np.float64)
+
+        min_len = min(len(f2_norm), len(f4_norm))
+        if min_len < 5:
+            return {
+                "verified": False,
+                "status": "INSUFFICIENT_DATA",
+                "message": "Recording too short for multi-harmonic cross-verification."
+            }
+
+        f2_slice = f2_norm[:min_len]
+        f4_slice = f4_norm[:min_len]
+
+        r_val, _ = pearsonr(f2_slice, f4_slice)
+        r_val = float(r_val) if not np.isnan(r_val) else 0.0
+        diff_mhz = float(np.mean(np.abs(f2_slice - f4_slice)) * 1000.0)
+
+        # Forensic classification
+        if r_val >= 0.80 and diff_mhz <= 25.0:
+            status = "CONFIRMED_POWER_GRID_ENF"
+            badge = "MULTI-HARMONIC CONFIRMED"
+            color = "emerald"
+            desc = "Harmonics f_2/2 (100Hz) and f_4/4 (200Hz) correlate strongly, confirming authentic power grid electromagnetic induction."
+        elif r_val >= 0.55:
+            status = "PROBABLE_POWER_GRID_ENF"
+            badge = "PROBABLE HARMONIC CORRELATION"
+            color = "cyan"
+            desc = "Moderate correlation across harmonics; signal likely originates from power grid."
+        else:
+            status = "INCONCLUSIVE_ACOUSTIC_NOISE"
+            badge = "LOW HARMONIC COHERENCE"
+            color = "amber"
+            desc = "Weak correlation between 100Hz and 200Hz. Signal may be dominated by non-grid mechanical noise (e.g., motor or compressor)."
+
+        comparison_points = []
+        for i in range(min_len):
+            comparison_points.append({
+                "second": i,
+                "f2_normalized_hz": round(float(f2_slice[i]), 5),
+                "f4_normalized_hz": round(float(f4_slice[i]), 5),
+                "diff_mhz": round(float(abs(f2_slice[i] - f4_slice[i]) * 1000.0), 2)
+            })
+
+        return {
+            "verified": bool(r_val >= 0.80),
+            "status": status,
+            "badge": badge,
+            "color": color,
+            "description": desc,
+            "cross_harmonic_r": round(r_val, 4),
+            "mean_discrepancy_mhz": round(diff_mhz, 2),
+            "h2_snr_db": h2["trace"]["mean_snr_db"],
+            "h4_snr_db": h4["trace"]["mean_snr_db"],
+            "comparison_points": comparison_points
+        }

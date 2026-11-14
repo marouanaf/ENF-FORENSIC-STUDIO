@@ -181,3 +181,21 @@ export interface AutoDownloadGridParams {
   target_month: number;
   nominal_hz: number;
 }
+
+export interface MultiHarmonicVerification {
+  verified: boolean;
+  status: string;
+  badge: string;
+  color: string;
+  description: string;
+  cross_harmonic_r: number;
+  mean_discrepancy_mhz: number;
+  h2_snr_db: number;
+  h4_snr_db: number;
+  comparison_points?: Array<{
+    second: number;
+    f2_normalized_hz: number;
+    f4_normalized_hz: number;
+    diff_mhz: number;
+  }>;
+}

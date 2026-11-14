@@ -656,3 +656,34 @@ def auto_download_grid(req: AutoDownloadGridRequest):
         return res
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Auto download failed: {str(e)}")
+
+# ---------------------------------------------------------------------------
+# MULTI-HARMONIC CROSS-VERIFICATION ENDPOINT (f_2/2 vs f_4/4)
+# ---------------------------------------------------------------------------
+
+class VerifyHarmonicsRequest(BaseModel):
+    media_id: str
+    start_sec: float = 0.0
+    end_sec: Optional[float] = None
+    nominal_grid_hz: float = 50.0
+
+
+@app.post("/api/verify-multi-harmonics")
+def verify_multi_harmonics_endpoint(req: VerifyHarmonicsRequest):
+    """
+    Extracts 2nd harmonic (100 Hz / 2) and 4th harmonic (200 Hz / 4), checks their
+    cross-correlation, and verifies that the hum originates from the electrical power grid.
+    """
+    if req.media_id not in media_registry:
+        raise HTTPException(status_code=404, detail="Media ID not found")
+    media_info = media_registry[req.media_id]
+    try:
+        res = engine.verify_multi_harmonics(
+            media_path=media_info["path"],
+            start_sec=req.start_sec,
+            end_sec=req.end_sec,
+            nominal_grid_hz=req.nominal_grid_hz
+        )
+        return res
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Multi-harmonic verification failed: {str(e)}")
