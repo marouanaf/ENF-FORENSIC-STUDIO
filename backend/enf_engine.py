@@ -583,12 +583,30 @@ class ENFEngine:
         if tri_result and tri_result.get("verified"):
             trace_res["normalized_enf"] = tri_result["fused_trace"]
 
+        fourier_spectrum = self.compute_fourier_spectrum(
+            audio=audio_raw,
+            fs=sr,
+            f_max=450.0,
+            nominal_grid_hz=nominal_grid_hz,
+            slice_sec=0.5
+        )
+
+        # Narrowband zoomed strictly on 100 Hz peak (+/- 0.35 Hz) matching Image 3
         spectrogram_data = self._compute_narrowband_spectrogram(
             signal=primary["filtered_audio"],
             fs=self.target_fs,
             center_freq=nominal_grid_hz * target_k,
-            freq_span=1.0,
+            freq_span=0.35,
             win_sec=min(8.0, window_seconds)
+        )
+
+        # Wideband spectrogram from 80 Hz to 220 Hz matching Image 2
+        wideband_data = self._compute_wideband_spectrogram(
+            signal=audio_1000,
+            fs=self.target_fs,
+            f_min=80.0,
+            f_max=220.0,
+            win_sec=min(4.0, window_seconds)
         )
 
         return {
@@ -600,6 +618,8 @@ class ENFEngine:
             "duration_sec": len(audio_1000) / self.target_fs,
             "trace": trace_res,
             "spectrogram": spectrogram_data,
+            "wideband_spectrogram": wideband_data,
+            "fourier_spectrum": fourier_spectrum,
             "multi_harmonic_verification": tri_result
         }
 
@@ -887,6 +907,134 @@ class ENFEngine:
             return optical_res
         else:
             raise RuntimeError("Both acoustic audio and optical rolling-shutter video extractions failed.")
+
+    def compute_fourier_spectrum(
+        self,
+        audio: np.ndarray,
+        fs: int,
+        f_max: float = 450.0,
+        nominal_grid_hz: float = 50.0,
+        slice_sec: Optional[float] = None
+    ) -> Dict[str, Any]:
+        r"""
+        Computes the Discrete Fourier Transform spectrum:
+            X(f) = \int x(t) e^{-2\pi i f t} dt
+        across 0 to 450 Hz, isolating:
+        - 50 Hz (Fundamental base frequency)
+        - 100 Hz (2x Second Harmonic - Dominant Mains Hum in Morocco)
+        - 200 Hz (4x Fourth Harmonic - Rectifier Ripple)
+        - 98.45 Hz (Mechanical motor / Refrigerator compressor hum)
+        """
+        if slice_sec is not None and slice_sec > 0:
+            target_samples = min(len(audio), int(round(slice_sec * fs)))
+            audio_slice = audio[:target_samples]
+        else:
+            audio_slice = audio
+
+        nfft = max(32768, int(2 ** math.ceil(math.log2(len(audio_slice) * 4))))
+        win = windows.hann(len(audio_slice), sym=False).astype(np.float64)
+        X = np.abs(np.fft.rfft(audio_slice * win, n=nfft))
+        freqs = np.fft.rfftfreq(nfft, 1.0 / fs)
+
+        mask = (freqs >= 15.0) & (freqs <= f_max)
+        f_sub = freqs[mask]
+        X_sub = X[mask]
+
+        def get_peak_in_band(low, high, label):
+            m = (freqs >= low) & (freqs <= high)
+            if not np.any(m):
+                return {"freq": round((low + high) / 2.0, 3), "mag": 0.0, "label": label}
+            idx = np.argmax(X[m])
+            p_f = float(freqs[m][idx])
+            p_m = float(X[m][idx])
+            return {"freq": round(p_f, 3), "mag": round(p_m, 2), "label": label}
+
+        peak_50 = get_peak_in_band(nominal_grid_hz - 0.4, nominal_grid_hz + 0.4, f"{nominal_grid_hz:.0f} Hz Fundamental")
+        peak_100 = get_peak_in_band(2 * nominal_grid_hz - 0.5, 2 * nominal_grid_hz + 0.5, f"{nominal_grid_hz * 2:.0f} Hz Mains Hum (Morocco)")
+        peak_200 = get_peak_in_band(4 * nominal_grid_hz - 1.0, 4 * nominal_grid_hz + 1.0, f"{nominal_grid_hz * 4:.0f} Hz Rectifier Harmonic")
+        peak_comp = get_peak_in_band(98.0, 99.0, "98.45 Hz Mechanical Compressor")
+
+        step = max(1, len(f_sub) // 400)
+        f_disp = f_sub[::step].tolist()
+        m_disp = X_sub[::step]
+        max_val = np.max(X_sub) if len(X_sub) > 0 else 1.0
+        m_norm = (m_disp / max_val).tolist()
+
+        return {
+            "equation": r"X(f) = \int x(t) e^{-2\pi i f t} dt",
+            "frequencies": [round(float(f), 1) for f in f_disp],
+            "magnitudes": [round(float(m), 4) for m in m_norm],
+            "raw_max_mag": round(float(max_val), 2),
+            "peak_50hz": peak_50,
+            "peak_100hz": peak_100,
+            "peak_200hz": peak_200,
+            "peak_compressor": peak_comp,
+            "nominal_grid_hz": nominal_grid_hz,
+            "slice_duration_sec": slice_sec or (len(audio_slice) / fs)
+        }
+
+    def _compute_wideband_spectrogram(
+        self,
+        signal: np.ndarray,
+        fs: int,
+        f_min: float = 80.0,
+        f_max: float = 220.0,
+        win_sec: float = 4.0
+    ) -> Dict[str, Any]:
+        """
+        Computes wideband STFT matrix (80 Hz to 220 Hz) showing both 100 Hz (f2)
+        and 200 Hz (f4) electrical harmonics across time, matching Image 2.
+        """
+        win_len = int(round(win_sec * fs))
+        step_samples = fs
+        if len(signal) < win_len:
+            win_len = max(fs * 2, len(signal))
+
+        nfft = max(8192, int(2 ** math.ceil(math.log2(win_len * 4))))
+        win = windows.hann(win_len, sym=False).astype(np.float64)
+        freq_res = fs / nfft
+
+        bin_min = max(0, int(math.floor(f_min / freq_res)))
+        bin_max = min(nfft // 2, int(math.ceil(f_max / freq_res)))
+
+        freq_axis = (np.arange(bin_min, bin_max + 1) * freq_res).tolist()
+        half_win = win_len // 2
+        signal_padded = np.pad(signal, (half_win, half_win), mode="reflect")
+
+        num_steps = max(1, int(math.floor(len(signal) / step_samples)))
+        time_axis = []
+        matrix_db = []
+
+        for i in range(num_steps):
+            center_idx = i * step_samples + half_win
+            start_idx = center_idx - half_win
+            end_idx = start_idx + win_len
+
+            frame = signal_padded[start_idx:end_idx] * win
+            X = np.fft.rfft(frame, n=nfft)
+            mags = np.abs(X[bin_min : bin_max + 1])
+
+            power_db = 20.0 * np.log10(np.maximum(mags, 1e-12))
+            matrix_db.append(power_db.tolist())
+            time_axis.append(float(round(i, 2)))
+
+        matrix_arr = np.array(matrix_db)
+        max_db = np.max(matrix_arr) if matrix_arr.size > 0 else 0.0
+        norm_matrix = np.clip((matrix_arr - (max_db - 45.0)) / 45.0, 0.0, 1.0)
+
+        step_f = max(1, len(freq_axis) // 120)
+        down_freqs = freq_axis[::step_f]
+        down_norm = norm_matrix[:, ::step_f]
+
+        return {
+            "times": time_axis,
+            "frequencies": [round(float(f), 2) for f in down_freqs],
+            "center_freq": (f_min + f_max) / 2.0,
+            "freq_span": (f_max - f_min) / 2.0,
+            "power_norm": down_norm.round(3).tolist(),
+            "min_freq": float(f_min),
+            "max_freq": float(f_max)
+        }
 
     def _compute_narrowband_spectrogram(
         self,

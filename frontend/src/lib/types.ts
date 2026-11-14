@@ -71,6 +71,25 @@ export interface SpectrogramData {
   max_freq: number;
 }
 
+export interface FourierSpectrumPeak {
+  freq: number;
+  mag: number;
+  label?: string;
+}
+
+export interface FourierSpectrumData {
+  equation: string;
+  frequencies: number[];
+  magnitudes: number[];
+  raw_max_mag: number;
+  peak_50hz: FourierSpectrumPeak;
+  peak_100hz: FourierSpectrumPeak;
+  peak_200hz: FourierSpectrumPeak;
+  peak_compressor: FourierSpectrumPeak;
+  nominal_grid_hz: number;
+  slice_duration_sec?: number;
+}
+
 export interface ExtractEnfResponse {
   media_id: string;
   mode: EnfAnalysisMode;
@@ -85,6 +104,8 @@ export interface ExtractEnfResponse {
   f_row_sampling_rate?: number;
   trace: EnfTrace;
   spectrogram: SpectrogramData;
+  wideband_spectrogram?: SpectrogramData;
+  fourier_spectrum?: FourierSpectrumData;
   multi_harmonic_verification?: MultiHarmonicVerification;
 }
 
@@ -202,6 +223,7 @@ export interface SimulationResult {
     mode: string;
     trace: EnfTrace;
     spectrogram: SpectrogramData;
+    fourier_spectrum?: FourierSpectrumData;
   };
   match: MatchResponse;
 }

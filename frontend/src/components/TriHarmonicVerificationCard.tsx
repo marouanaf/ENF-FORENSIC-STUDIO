@@ -244,11 +244,20 @@ export const TriHarmonicVerificationCard: React.FC<TriHarmonicVerificationCardPr
       {/* Interactive Harmonics Comparison Chart */}
       {showChart && comparison_points.length > 0 && (
         <div className="pt-3 border-t border-slate-800/80 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
-            <span className="text-slate-400 flex items-center gap-1.5">
-              <Activity className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Multi-Harmonic Instantaneous Traces Normalized to {nominalGridHz} Hz:</span>
-            </span>
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs font-mono pb-2 border-b border-slate-800">
+            {/* Image 4 Mathematical Header */}
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-2 font-serif text-lg sm:text-xl font-bold text-cyan-400">
+                <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 inline-block shadow-sm shadow-cyan-500" />
+                <span>f₂ / 2</span>
+                <span className="text-xs font-sans font-normal text-slate-400">(100 Hz / 2)</span>
+              </div>
+              <div className="flex items-center gap-2 font-serif text-lg sm:text-xl font-bold text-amber-400">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block shadow-sm shadow-amber-500" />
+                <span>f₄ / 4</span>
+                <span className="text-xs font-sans font-normal text-slate-400">(200 Hz / 4)</span>
+              </div>
+            </div>
 
             {/* Toggle checkboxes for harmonics */}
             <div className="flex items-center gap-3">
@@ -311,7 +320,8 @@ export const TriHarmonicVerificationCard: React.FC<TriHarmonicVerificationCardPr
                   tickLine={false}
                   tickFormatter={(v) => `${v.toFixed(3)}Hz`}
                   domain={["auto", "auto"]}
-                  width={62}
+                  width={68}
+                  label={{ value: "f / h (Hz)", angle: -90, position: "insideLeft", fill: "#94a3b8", fontSize: 10 }}
                 />
                 <Tooltip
                   content={({ active, payload }) => {
@@ -363,10 +373,11 @@ export const TriHarmonicVerificationCard: React.FC<TriHarmonicVerificationCardPr
                   <Line
                     type="monotone"
                     dataKey="f2_normalized_hz"
-                    stroke="#10b981"
-                    strokeWidth={1.8}
-                    dot={false}
-                    name="f2/2 (100Hz)"
+                    stroke="#38bdf8"
+                    strokeWidth={1.6}
+                    strokeDasharray="3 3"
+                    dot={{ r: 2.2, fill: "#38bdf8", stroke: "#0284c7", strokeWidth: 1 }}
+                    name="f₂/2 (100 Hz / 2)"
                     isAnimationActive={false}
                   />
                 )}
@@ -374,10 +385,11 @@ export const TriHarmonicVerificationCard: React.FC<TriHarmonicVerificationCardPr
                   <Line
                     type="monotone"
                     dataKey="f4_normalized_hz"
-                    stroke="#06b6d4"
-                    strokeWidth={1.5}
-                    dot={false}
-                    name="f4/4 (200Hz)"
+                    stroke="#fbbf24"
+                    strokeWidth={1.6}
+                    strokeDasharray="3 3"
+                    dot={{ r: 2.2, fill: "#fbbf24", stroke: "#d97706", strokeWidth: 1 }}
+                    name="f₄/4 (200 Hz / 4)"
                     isAnimationActive={false}
                   />
                 )}

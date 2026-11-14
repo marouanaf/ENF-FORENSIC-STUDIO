@@ -180,6 +180,42 @@ class MatchDatabaseRequest(BaseModel):
 # API Endpoints
 # ---------------------------------------------------------------------------
 
+class FourierSpectrumRequest(BaseModel):
+    media_id: str
+    start_sec: float = 0.0
+    slice_sec: float = 0.5
+    nominal_grid_hz: float = 50.0
+
+
+@app.post("/api/fourier-spectrum")
+def get_fourier_spectrum(req: FourierSpectrumRequest):
+    """
+    Computes the instantaneous Fourier Transform spectrum:
+        X(f) = int x(t) * exp(-2*pi*i*f*t) dt
+    at start_sec across 0-450 Hz, isolating 50 Hz base, 100 Hz mains hum peak (Morocco), and 200 Hz rectifier.
+    """
+    if req.media_id not in media_registry:
+        raise HTTPException(status_code=404, detail="Media not found")
+    media = media_registry[req.media_id]
+    try:
+        audio_raw, sr = engine.extract_audio_roi_to_float64(
+            media["path"],
+            start_sec=req.start_sec,
+            duration_sec=max(0.5, req.slice_sec),
+            intermediate_sr=2000
+        )
+        spec = engine.compute_fourier_spectrum(
+            audio=audio_raw,
+            fs=sr,
+            f_max=450.0,
+            nominal_grid_hz=req.nominal_grid_hz,
+            slice_sec=req.slice_sec
+        )
+        return spec
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Fourier spectrum calculation failed: {str(e)}")
+
+
 @app.get("/api/health")
 def health():
     return {
@@ -404,6 +440,8 @@ def extract_enf(req: ExtractEnfRequest):
             "duration_sec": result.get("duration_sec"),
             "trace": result["trace"],
             "spectrogram": result["spectrogram"],
+            "wideband_spectrogram": result.get("wideband_spectrogram"),
+            "fourier_spectrum": result.get("fourier_spectrum"),
             "multi_harmonic_verification": result.get("multi_harmonic_verification")
         }
     except Exception as e:
@@ -613,7 +651,10 @@ def demo_synthetic_test():
             "extraction": {
                 "mode": "acoustic",
                 "trace": extract_res["trace"],
-                "spectrogram": extract_res["spectrogram"]
+                "spectrogram": extract_res["spectrogram"],
+                "wideband_spectrogram": extract_res.get("wideband_spectrogram"),
+                "fourier_spectrum": extract_res.get("fourier_spectrum"),
+                "multi_harmonic_verification": extract_res.get("multi_harmonic_verification")
             },
             "match": match_res
         }

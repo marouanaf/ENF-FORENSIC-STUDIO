@@ -13,6 +13,7 @@ import { CandidatesTable } from "../components/CandidatesTable";
 import { UploadGridModal } from "../components/UploadGridModal";
 import { EvidenceReportModal } from "../components/EvidenceReportModal";
 import { TriHarmonicVerificationCard } from "../components/TriHarmonicVerificationCard";
+import { FourierSpectrumInspector } from "../components/FourierSpectrumInspector";
 import {
   autoDownloadGrid,
   checkHealth,
@@ -300,7 +301,16 @@ export default function ForensicWorkstationPage() {
               </div>
             </div>
 
-            {/* Multi-Harmonic Consensus Telemetry (f1, f2, f4) */}
+            {/* 1. Discrete Fourier Transform Spectrum View (Image 1: X(f) = ∫ x(t) e^{-2π i f t} dt) */}
+            {extractionResult.fourier_spectrum && (
+              <FourierSpectrumInspector
+                data={extractionResult.fourier_spectrum}
+                mediaId={mediaInfo?.media_id}
+                currentTime={roiStart}
+              />
+            )}
+
+            {/* 2. Multi-Harmonic Consensus Telemetry (f2/2 vs f4/4 - Image 4) */}
             {extractionResult.multi_harmonic_verification && (
               <TriHarmonicVerificationCard
                 data={extractionResult.multi_harmonic_verification}
@@ -308,9 +318,10 @@ export default function ForensicWorkstationPage() {
               />
             )}
 
-            {/* Spectrogram Preview */}
+            {/* 3. Narrowband 100 Hz Peak Ridge & Wideband Spectrogram (Image 2 & 3) */}
             <SpectrogramView
               spectrogram={extractionResult.spectrogram}
+              widebandSpectrogram={extractionResult.wideband_spectrogram}
               trace={extractionResult.trace}
             />
 
