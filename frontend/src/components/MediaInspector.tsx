@@ -13,6 +13,8 @@ import {
   Sliders,
   Scan,
   Shield,
+  Clock,
+  Video,
 } from "lucide-react";
 import { EnfAnalysisMode, MediaInfo } from "../lib/types";
 import { uploadMedia, getMediaStreamUrl } from "../lib/api";
@@ -74,7 +76,7 @@ export const MediaInspector: React.FC<MediaInspectorProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Upload Zone */}
+      {/* Upload Zone (when no media is loaded) */}
       {!mediaInfo ? (
         <div
           onDragOver={(e) => {
@@ -84,10 +86,10 @@ export const MediaInspector: React.FC<MediaInspectorProps> = ({
           onDragLeave={() => setDragActive(false)}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
-          className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center cursor-pointer transition-all ${
+          className={`border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center text-center cursor-pointer transition-all ${
             dragActive
               ? "border-emerald-500 bg-emerald-950/20"
-              : "border-slate-800 hover:border-slate-700 bg-slate-900/50"
+              : "border-slate-800 hover:border-emerald-500/60 bg-slate-900/60 hover:bg-slate-900/80"
           }`}
         >
           <input
@@ -102,36 +104,37 @@ export const MediaInspector: React.FC<MediaInspectorProps> = ({
             className="hidden"
           />
 
-          <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mb-4 shadow-lg shadow-emerald-950">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 mb-4 shadow-xl shadow-emerald-950">
             {isUploading ? (
-              <RefreshCw className="w-6 h-6 animate-spin" />
+              <RefreshCw className="w-7 h-7 animate-spin" />
             ) : (
-              <Upload className="w-6 h-6" />
+              <Upload className="w-7 h-7" />
             )}
           </div>
 
-          <h3 className="text-sm font-semibold text-slate-100 mb-1">
-            {isUploading ? "Probing Video & Audio Telemetry..." : "Drag & Drop Forensic Media File"}
+          <h3 className="text-base font-bold text-white mb-1">
+            {isUploading ? "Decoding Video & Probing Audio Tracks..." : "Drop Any Audio or Video File to Authenticate"}
           </h3>
-          <p className="text-xs text-slate-400 max-w-sm mb-3">
-            Upload MP4, MOV, MKV, AVI, WAV, or MP3. Supports both Acoustic mains hum extraction and CMOS rolling-shutter optical flicker analysis.
+          <p className="text-xs text-slate-400 max-w-md mb-4 leading-relaxed">
+            Upload any surveillance, police bodycam, smartphone recording, or online video (MP4, MOV, MKV, AVI, WAV, MP3).
+            The engine automatically probes audio tracks and CMOS rolling-shutter video frames.
           </p>
 
-          <span className="px-3 py-1 rounded-md text-xs font-mono font-medium bg-slate-800 text-slate-300 border border-slate-700">
-            Browse Forensic Audio/Video
+          <span className="px-4 py-2 rounded-lg text-xs font-mono font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-950/60 transition-colors">
+            Choose Media File
           </span>
 
           {errorMessage && (
-            <div className="mt-4 flex items-center gap-1.5 text-xs text-rose-400 bg-rose-950/30 px-3 py-1.5 rounded border border-rose-900/50">
+            <div className="mt-4 flex items-center gap-1.5 text-xs text-rose-400 bg-rose-950/40 px-3.5 py-2 rounded-xl border border-rose-900/60">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{errorMessage}</span>
             </div>
           )}
         </div>
       ) : (
-        /* Loaded Media & Multi-Modal Controls */
+        /* Loaded Evidence Inspector */
         <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 shadow-xl space-y-4">
-          {/* Media Header & Info Badges */}
+          {/* Evidence Header */}
           <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-sm shadow-emerald-950">
@@ -140,8 +143,8 @@ export const MediaInspector: React.FC<MediaInspectorProps> = ({
               <div>
                 <div className="text-xs font-bold text-slate-100 flex items-center gap-2">
                   <span className="truncate max-w-sm">{mediaInfo.filename}</span>
-                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono">
-                    EVIDENCE
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono">
+                    LOADED EVIDENCE
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono text-slate-400 mt-0.5">
@@ -162,7 +165,7 @@ export const MediaInspector: React.FC<MediaInspectorProps> = ({
               onClick={() => fileInputRef.current?.click()}
               className="px-2.5 py-1 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 cursor-pointer transition-colors"
             >
-              Replace Media
+              Upload Other Media
             </button>
             <input
               ref={fileInputRef}
@@ -177,7 +180,7 @@ export const MediaInspector: React.FC<MediaInspectorProps> = ({
             />
           </div>
 
-          {/* Forensic Modality Selection Tabs */}
+          {/* Modality Selector Tabs */}
           <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-3 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
@@ -229,7 +232,7 @@ export const MediaInspector: React.FC<MediaInspectorProps> = ({
                 </div>
               </button>
 
-              {/* Auto Multi-Modal Tab */}
+              {/* Auto-Fusion Tab */}
               <button
                 type="button"
                 onClick={() => setAnalysisMode("auto_fusion")}
@@ -248,18 +251,18 @@ export const MediaInspector: React.FC<MediaInspectorProps> = ({
             </div>
           </div>
 
-          {/* HTML5 Video Player Preview (if video container) */}
+          {/* Adaptive Video Player Preview */}
           {mediaInfo.has_video && (
-            <div className="relative rounded-xl overflow-hidden border border-slate-800 bg-black flex justify-center max-h-64 shadow-2xl">
+            <div className="relative rounded-xl overflow-hidden border border-slate-800 bg-slate-950 flex items-center justify-center shadow-inner py-1">
               <video
                 src={getMediaStreamUrl(mediaInfo.media_id)}
                 controls
-                className="max-h-64 w-auto rounded"
+                className="max-h-56 max-w-full rounded object-contain shadow-2xl"
               />
               {/* Rolling Shutter Scanline HUD Overlay */}
               {analysisMode === "optical" && (
                 <div className="absolute inset-0 pointer-events-none border border-cyan-500/40 rounded-xl overflow-hidden">
-                  <div className="w-full h-1 bg-cyan-400/70 shadow-lg shadow-cyan-400 animate-scanline" />
+                  <div className="w-full h-1 bg-cyan-400/80 shadow-lg shadow-cyan-400 animate-scanline" />
                   <div className="absolute top-2 left-2 bg-slate-950/90 backdrop-blur-sm px-2.5 py-1 rounded text-[10px] font-mono text-cyan-300 border border-cyan-800/60 flex items-center gap-1.5">
                     <Scan className="w-3 h-3 text-cyan-400 animate-spin" />
                     <span>CMOS Row Scan Active ({mediaInfo.fps} FPS • {mediaInfo.resolution})</span>

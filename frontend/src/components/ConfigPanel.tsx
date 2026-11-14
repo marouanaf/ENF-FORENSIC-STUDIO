@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useState } from "react";
 import {
   Settings,
   Cpu,
@@ -13,6 +13,9 @@ import {
   Radio,
   Globe2,
   RefreshCw,
+  CloudDownload,
+  CheckCircle2,
+  Calendar,
 } from "lucide-react";
 import { EnfAnalysisMode, GridDatabaseInfo, MediaInfo } from "../lib/types";
 
@@ -32,11 +35,10 @@ interface ConfigPanelProps {
   setSelectedDatabaseId: (id: string) => void;
   onRefreshDatabases: () => void;
   onOpenUploadModal: () => void;
-  onExtractEnf: () => void;
-  onMatchDatabase: () => void;
-  isExtracting: boolean;
-  isMatching: boolean;
-  hasExtractedTrace: boolean;
+  onRunFullForensicAnalysis: () => void;
+  isAnalyzing: boolean;
+  onQuickDownloadYear: (year: number) => void;
+  isDownloadingYear: boolean;
 }
 
 export const ConfigPanel: React.FC<ConfigPanelProps> = ({
@@ -55,21 +57,28 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
   setSelectedDatabaseId,
   onRefreshDatabases,
   onOpenUploadModal,
-  onExtractEnf,
-  onMatchDatabase,
-  isExtracting,
-  isMatching,
-  hasExtractedTrace,
+  onRunFullForensicAnalysis,
+  isAnalyzing,
+  onQuickDownloadYear,
+  isDownloadingYear,
 }) => {
+  const [selectedYear, setSelectedYear] = useState<number>(2017);
   const targetFreq = nominalGrid * harmonicMultiplier;
 
+  // Check if selectedYear is available in databases
+  const matchingDb = databases.find(
+    (d) =>
+      d.filename.includes(String(selectedYear)) ||
+      d.start_time_utc?.startsWith(String(selectedYear))
+  );
+
   return (
-    <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-5 shadow-xl space-y-6">
+    <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-5 shadow-xl space-y-5">
       <div className="flex items-center justify-between pb-3 border-b border-slate-800">
         <div className="flex items-center gap-2">
           <Settings className="w-4 h-4 text-emerald-400" />
           <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-200">
-            Grid & Forensic DSP Configuration
+            Forensic Grid & DSP Configuration
           </h2>
         </div>
         <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800/50">
@@ -77,12 +86,12 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
         </span>
       </div>
 
-      {/* 1. Nominal Grid Frequency Toggle */}
+      {/* 1. Synchronous Grid Zone Selection */}
       <div>
         <label className="block text-xs font-medium text-slate-300 mb-2 flex items-center justify-between">
-          <span>1. Synchronous Power Grid Frequency</span>
+          <span>1. Synchronous Power Grid Interconnection</span>
           <span className="text-[11px] text-emerald-400 font-mono font-semibold">
-            {nominalGrid === 50 ? "Europe / Morocco ONEE" : "North America (US/CA)"}
+            {nominalGrid === 50 ? "Europe / Morocco ONEE (50Hz)" : "North America (60Hz)"}
           </span>
         </label>
         <div className="grid grid-cols-2 gap-2">
@@ -96,7 +105,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
             }`}
           >
             <Radio className="w-3.5 h-3.5" />
-            <span>50 Hz (Continental Europe / Morocco)</span>
+            <span>50 Hz (Continental Europe & Morocco)</span>
           </button>
           <button
             type="button"
@@ -108,16 +117,102 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
             }`}
           >
             <Radio className="w-3.5 h-3.5" />
-            <span>60 Hz (North America)</span>
+            <span>60 Hz (North America NERC)</span>
           </button>
         </div>
       </div>
 
-      {/* 2. Target Harmonic Multiplier (Acoustic & Optical) */}
+      {/* 2. Choose Historical Grid by Year & Auto-Download */}
+      <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800/80 space-y-2.5">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+            <Calendar className="w-3.5 h-3.5 text-cyan-400" />
+            <span>2. Choose Historical Grid by Year</span>
+          </label>
+          <button
+            onClick={onOpenUploadModal}
+            className="text-[11px] font-medium text-cyan-400 hover:text-cyan-300 px-2 py-0.5 rounded bg-cyan-950/60 border border-cyan-800/50 cursor-pointer flex items-center gap-1"
+          >
+            <CloudDownload className="w-3 h-3" />
+            <span>Zenodo Downloader</span>
+          </button>
+        </div>
+
+        {/* Year Pills */}
+        <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5">
+          {[2017, 2018, 2019, 2020, 2021, 2022, 2024].map((year) => {
+            const hasData = databases.some(
+              (d) => d.filename.includes(String(year)) || d.start_time_utc?.startsWith(String(year))
+            );
+            const isSelected = selectedYear === year;
+
+            return (
+              <button
+                key={year}
+                type="button"
+                onClick={() => {
+                  setSelectedYear(year);
+                  const db = databases.find(
+                    (d) => d.filename.includes(String(year)) || d.start_time_utc?.startsWith(String(year))
+                  );
+                  if (db) setSelectedDatabaseId(db.database_id);
+                }}
+                className={`py-1.5 px-1 rounded-lg text-xs font-mono font-bold border transition-all cursor-pointer text-center relative ${
+                  isSelected
+                    ? "bg-cyan-500/20 text-cyan-300 border-cyan-500 shadow-sm shadow-cyan-950"
+                    : "bg-slate-900 hover:bg-slate-800 text-slate-400 border-slate-800"
+                }`}
+              >
+                <span>{year}</span>
+                {hasData && (
+                  <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full absolute top-1 right-1" title="Data Ingested" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Year Status & Inline Download Button */}
+        <div className="flex items-center justify-between text-[11px] font-mono pt-1">
+          {matchingDb ? (
+            <div className="text-emerald-400 flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Year {selectedYear} Ingested & Ready ({matchingDb.row_count.toLocaleString()}s)</span>
+            </div>
+          ) : (
+            <div className="text-amber-300 flex items-center justify-between w-full">
+              <span>Year {selectedYear} not downloaded yet</span>
+              <button
+                onClick={() => onQuickDownloadYear(selectedYear)}
+                disabled={isDownloadingYear}
+                className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-semibold flex items-center gap-1 shadow cursor-pointer disabled:opacity-40"
+              >
+                {isDownloadingYear ? <RefreshCw className="w-3 h-3 animate-spin" /> : <CloudDownload className="w-3 h-3" />}
+                <span>Auto-Download {selectedYear} Grid</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Database Dropdown */}
+        <select
+          value={selectedDatabaseId}
+          onChange={(e) => setSelectedDatabaseId(e.target.value)}
+          className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-[11px] font-mono text-slate-200 focus:outline-none focus:border-cyan-500 cursor-pointer"
+        >
+          {databases.map((db) => (
+            <option key={db.database_id} value={db.database_id}>
+              {db.filename} ({db.row_count.toLocaleString()}s • {db.nominal_grid_hz}Hz)
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* 3. Harmonic Multiplier */}
       <div>
         <div className="flex items-center justify-between mb-2">
           <label className="text-xs font-medium text-slate-300">
-            2. Harmonic Multiplier
+            3. Harmonic Multiplier
           </label>
           <span className="text-[11px] font-mono text-cyan-400">
             {analysisMode === "optical" ? "Locked to 2x (100Hz Light Flicker)" : "Acoustic Mains Hum"}
@@ -147,10 +242,10 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
         </div>
       </div>
 
-      {/* 3. STFT Window Duration */}
+      {/* 4. STFT Window Duration */}
       <div>
         <div className="flex justify-between text-xs text-slate-300 mb-2">
-          <span>3. STFT Window Duration (Zero-Phase Smoothing)</span>
+          <span>4. STFT Window Duration (Smoothing)</span>
           <span className="font-mono text-emerald-400 font-bold">{windowDuration}s</span>
         </div>
         <div className="flex gap-2">
@@ -171,68 +266,23 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
         </div>
       </div>
 
-      {/* 4. Historical Grid Reference Database */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
-            <Globe2 className="w-3.5 h-3.5 text-emerald-400" />
-            <span>4. Historical Grid Parquet Database</span>
-          </label>
-          <button
-            onClick={onOpenUploadModal}
-            className="text-[11px] font-medium text-cyan-400 hover:text-cyan-300 px-2 py-0.5 rounded bg-cyan-950/60 border border-cyan-800/60 transition-colors cursor-pointer flex items-center gap-1"
-          >
-            <Upload className="w-3 h-3" />
-            <span>Upload / Ingest CSV</span>
-          </button>
-        </div>
-
-        <select
-          value={selectedDatabaseId}
-          onChange={(e) => setSelectedDatabaseId(e.target.value)}
-          className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-emerald-500 cursor-pointer"
-        >
-          {databases.map((db) => (
-            <option key={db.database_id} value={db.database_id}>
-              {db.filename} ({db.row_count.toLocaleString()}s • {db.nominal_grid_hz}Hz)
-            </option>
-          ))}
-        </select>
-        <p className="text-[10px] text-slate-500 mt-1">
-          Continental Europe & Morocco ONEE synchronous grid datasets (Zenodo 5105820 & 15784548).
-        </p>
-      </div>
-
-      {/* 5. Primary Action Triggers */}
-      <div className="space-y-2 pt-2 border-t border-slate-800">
+      {/* 5. Primary Action: Unified 1-Click Forensic Authentication */}
+      <div className="pt-2 border-t border-slate-800">
         <button
-          onClick={onExtractEnf}
-          disabled={!mediaInfo || isExtracting}
-          className="w-full py-2.5 px-4 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-950/50 flex items-center justify-center gap-2 transition-all disabled:opacity-40 cursor-pointer"
+          onClick={onRunFullForensicAnalysis}
+          disabled={!mediaInfo || isAnalyzing}
+          className="w-full py-3 px-4 rounded-xl text-xs font-extrabold bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white shadow-xl shadow-emerald-950/60 flex items-center justify-center gap-2 transition-all disabled:opacity-40 cursor-pointer"
         >
-          {isExtracting ? (
-            <RefreshCw className="w-4 h-4 animate-spin" />
-          ) : (
-            <Cpu className="w-4 h-4" />
-          )}
-          <span>
-            {isExtracting
-              ? `Extracting ${analysisMode.toUpperCase()} ENF Signal...`
-              : `Extract ${analysisMode === "optical" ? "Optical (CMOS)" : analysisMode === "auto_fusion" ? "Auto-Fusion" : "Acoustic"} ENF Trace`}
-          </span>
-        </button>
-
-        <button
-          onClick={onMatchDatabase}
-          disabled={!hasExtractedTrace || isMatching}
-          className="w-full py-2.5 px-4 rounded-lg text-xs font-semibold bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-lg shadow-cyan-950/50 flex items-center justify-center gap-2 transition-all disabled:opacity-40 cursor-pointer"
-        >
-          {isMatching ? (
+          {isAnalyzing ? (
             <RefreshCw className="w-4 h-4 animate-spin" />
           ) : (
             <Search className="w-4 h-4" />
           )}
-          <span>{isMatching ? "Running FFT Parquet Matching..." : "Execute Vectorized Database Correlation"}</span>
+          <span>
+            {isAnalyzing
+              ? "Running Multi-Modal DSP & FFT Correlation..."
+              : `⚡ Authenticate Video Against ${selectedYear} Grid (1-Click)`}
+          </span>
         </button>
       </div>
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Header } from "../components/Header";
 import { MediaInspector } from "../components/MediaInspector";
 import { ConfigPanel } from "../components/ConfigPanel";
@@ -12,11 +12,11 @@ import { CandidatesTable } from "../components/CandidatesTable";
 import { UploadGridModal } from "../components/UploadGridModal";
 import { EvidenceReportModal } from "../components/EvidenceReportModal";
 import {
+  autoDownloadGrid,
   checkHealth,
   extractEnfMultiModal,
   fetchDatabases,
   matchDatabase,
-  run2017ZouzSimulation,
 } from "../lib/api";
 import {
   EnfAnalysisMode,
@@ -25,7 +25,7 @@ import {
   MatchResponse,
   MediaInfo,
 } from "../lib/types";
-import { AlertCircle, CheckCircle, ShieldCheck, Zap, FileText, Sparkles } from "lucide-react";
+import { AlertCircle, CheckCircle, ShieldCheck, Zap, FileText, Upload, Calendar, Search } from "lucide-react";
 
 export default function ForensicWorkstationPage() {
   // Backend & Databases
@@ -50,14 +50,11 @@ export default function ForensicWorkstationPage() {
   const [selectedRank, setSelectedRank] = useState<number>(1);
 
   // UI state
-  const [isExtracting, setIsExtracting] = useState(false);
-  const [isMatching, setIsMatching] = useState(false);
-  const [isLoadingSimulation, setIsLoadingSimulation] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isDownloadingYear, setIsDownloadingYear] = useState(false);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [notification, setNotification] = useState<{ type: "success" | "error" | "info"; msg: string } | null>(null);
-
-  const initialSimulationTriggered = useRef(false);
 
   // Fetch databases list
   const refreshDatabases = useCallback(async () => {
@@ -77,76 +74,13 @@ export default function ForensicWorkstationPage() {
     setTimeout(() => setNotification(null), 6000);
   };
 
-  // Run 2017 Zouz Vlogs Forensic Simulation (04:58:19 AM Casablanca)
-  const handleRun2017Simulation = useCallback(async (isInitialAutoLoad: boolean = false) => {
-    setIsLoadingSimulation(true);
-    try {
-      if (!isInitialAutoLoad) {
-        showNotification("info", "Synthesizing 2017-11-09 Morocco ONEE 50Hz grid & media hum at 04:58:19 AM Casablanca...");
-      }
-
-      const sim = await run2017ZouzSimulation();
-      await refreshDatabases();
-
-      setMediaInfo({
-        media_id: sim.media.media_id,
-        filename: sim.media.filename,
-        duration: sim.media.duration,
-        has_video: sim.media.has_video,
-        fps: 30.0,
-        resolution: "640x360",
-        waveform_peaks: sim.media.waveform_peaks,
-        size_bytes: 1200000,
-      });
-
-      setRoiStart(0);
-      setRoiDuration(sim.media.duration);
-      setNominalGrid(50.0);
-      setHarmonicMultiplier(2);
-      setSelectedDatabaseId(sim.match.database_id || "sim_2017_11_09_morocco");
-
-      setExtractionResult({
-        media_id: sim.media.media_id,
-        mode: "acoustic",
-        nominal_grid_hz: 50.0,
-        harmonic_multiplier: 2,
-        target_freq_hz: 100.0,
-        start_sec: 0,
-        duration_sec: sim.media.duration,
-        trace: sim.extraction.trace,
-        spectrogram: sim.extraction.spectrogram,
-      });
-
-      setMatchResult(sim.match);
-      setSelectedRank(1);
-
-      if (!isInitialAutoLoad) {
-        showNotification(
-          "success",
-          `★ AUTHENTICATED! 2017 Zouz Vlogs timestamped to: ${sim.match.best_match.casablanca_time} (r = ${sim.match.best_match.pearson_r.toFixed(4)})!`
-        );
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Simulation failed";
-      showNotification("error", msg);
-    } finally {
-      setIsLoadingSimulation(false);
-    }
-  }, [refreshDatabases]);
-
-  // Initial mount health check & auto-load simulation if empty
+  // Initial mount health check
   useEffect(() => {
     const init = async () => {
       try {
         await checkHealth();
         setBackendOnline(true);
         await refreshDatabases();
-
-        // Auto-load 2017 Moroccan forensic simulation on first load so user immediately sees full dashboard
-        if (!initialSimulationTriggered.current) {
-          initialSimulationTriggered.current = true;
-          handleRun2017Simulation(true);
-        }
       } catch {
         setBackendOnline(false);
       }
@@ -161,15 +95,48 @@ export default function ForensicWorkstationPage() {
       }
     }, 5000);
     return () => clearInterval(interval);
-  }, [refreshDatabases, handleRun2017Simulation]);
+  }, [refreshDatabases]);
 
-  // Action: Extract ENF Signal (Acoustic, Optical, or Fusion)
-  const handleExtractEnf = async () => {
-    if (!mediaInfo) return;
-    setIsExtracting(true);
-    setMatchResult(null);
+  // Quick download a specific year from Zenodo
+  const handleQuickDownloadYear = async (year: number) => {
+    setIsDownloadingYear(true);
+    showNotification("info", `Connecting to Zenodo & ingesting ${year} grid data...`);
     try {
-      const res = await extractEnfMultiModal({
+      const catalogId = year === 2017 ? "zenodo_2017_morocco" : `zenodo_${year}_ce`;
+      const newDb = await autoDownloadGrid({
+        catalog_id: catalogId,
+        scope: "month",
+        target_year: year,
+        target_month: 11,
+        nominal_hz: nominalGrid,
+      });
+      await refreshDatabases();
+      setSelectedDatabaseId(newDb.database_id);
+      showNotification("success", `✓ Ingested ${year} grid dataset: ${newDb.filename}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Download failed";
+      showNotification("error", msg);
+    } finally {
+      setIsDownloadingYear(false);
+    }
+  };
+
+  // Unified Forensic Action: Extract ENF from ANY video & Correlate against chosen Grid Year
+  const handleRunFullForensicAnalysis = async () => {
+    if (!mediaInfo) {
+      showNotification("error", "Please upload or select an audio/video file first.");
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setExtractionResult(null);
+    setMatchResult(null);
+
+    try {
+      showNotification("info", `Step 1/2: Extracting ${analysisMode.toUpperCase()} ENF trace from media...`);
+
+      // 1. Extract ENF
+      const extRes = await extractEnfMultiModal({
         media_id: mediaInfo.media_id,
         start_sec: roiStart,
         end_sec: roiStart + roiDuration,
@@ -178,42 +145,31 @@ export default function ForensicWorkstationPage() {
         harmonic: harmonicMultiplier,
         window_seconds: windowDuration,
       });
-      setExtractionResult(res);
-      showNotification(
-        "success",
-        `Extracted ${res.trace.sample_count} points via ${res.selected_modality?.toUpperCase() || res.mode.toUpperCase()} (Mean SNR: +${res.trace.mean_snr_db.toFixed(1)} dB)`
-      );
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Extraction failed";
-      showNotification("error", msg);
-    } finally {
-      setIsExtracting(false);
-    }
-  };
+      setExtractionResult(extRes);
 
-  // Action: Execute Database Correlation Search
-  const handleMatchDatabase = async () => {
-    if (!extractionResult) return;
-    setIsMatching(true);
-    try {
-      const res = await matchDatabase({
-        media_id: mediaInfo?.media_id,
-        query_enf: extractionResult.trace.normalized_enf,
+      // 2. Correlate against selected database
+      showNotification("info", "Step 2/2: Computing FFT cross-correlation across historical grid database...");
+
+      const mRes = await matchDatabase({
+        media_id: mediaInfo.media_id,
+        query_enf: extRes.trace.normalized_enf,
         database_id: selectedDatabaseId || undefined,
         top_k: 5,
         min_separation_sec: 300,
       });
-      setMatchResult(res);
+
+      setMatchResult(mRes);
       setSelectedRank(1);
+
       showNotification(
         "success",
-        `Correlated! Matched ${res.best_match.casablanca_time || res.best_match.start_timestamp_utc} (r = ${res.best_match.pearson_r.toFixed(4)}, RMSE: ${res.best_match.rmse_mhz.toFixed(2)} mHz)`
+        `Forensic matching complete! Best match: ${mRes.best_match.casablanca_time || mRes.best_match.start_timestamp_utc} (r = ${mRes.best_match.pearson_r.toFixed(4)}, RMSE: ${mRes.best_match.rmse_mhz.toFixed(2)} mHz)`
       );
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Matching failed";
+      const msg = err instanceof Error ? err.message : "Forensic analysis failed";
       showNotification("error", msg);
     } finally {
-      setIsMatching(false);
+      setIsAnalyzing(false);
     }
   };
 
@@ -227,8 +183,6 @@ export default function ForensicWorkstationPage() {
         activeDatabaseName={activeDbInfo?.filename}
         nominalGrid={nominalGrid}
         analysisMode={analysisMode}
-        onRun2017Simulation={() => handleRun2017Simulation(false)}
-        isLoadingSimulation={isLoadingSimulation}
         onOpenUploadModal={() => setUploadModalOpen(true)}
       />
 
@@ -263,6 +217,7 @@ export default function ForensicWorkstationPage() {
                 setMediaInfo(info);
                 setExtractionResult(null);
                 setMatchResult(null);
+                showNotification("info", `Loaded: ${info.filename} (${info.duration}s). Ready for forensic analysis.`);
               }}
               roiStart={roiStart}
               roiDuration={roiDuration}
@@ -293,11 +248,10 @@ export default function ForensicWorkstationPage() {
               setSelectedDatabaseId={setSelectedDatabaseId}
               onRefreshDatabases={refreshDatabases}
               onOpenUploadModal={() => setUploadModalOpen(true)}
-              onExtractEnf={handleExtractEnf}
-              onMatchDatabase={handleMatchDatabase}
-              isExtracting={isExtracting}
-              isMatching={isMatching}
-              hasExtractedTrace={!!extractionResult}
+              onRunFullForensicAnalysis={handleRunFullForensicAnalysis}
+              isAnalyzing={isAnalyzing}
+              onQuickDownloadYear={handleQuickDownloadYear}
+              isDownloadingYear={isDownloadingYear}
             />
           </div>
         </div>
@@ -364,7 +318,7 @@ export default function ForensicWorkstationPage() {
         )}
       </main>
 
-      {/* CSV Ingestion Modal */}
+      {/* Historical Grid Downloader & Ingestion Modal */}
       <UploadGridModal
         isOpen={uploadModalOpen}
         onClose={() => setUploadModalOpen(false)}

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Activity, ShieldCheck, Zap, HelpCircle, Database, Globe2, Radio, Camera, RefreshCw, Cpu, Layers, Sparkles } from "lucide-react";
+import { Activity, ShieldCheck, HelpCircle, Database, Globe2, Radio, Camera, Cpu, Layers, Sparkles, CloudDownload } from "lucide-react";
 import { EnfAnalysisMode } from "../lib/types";
 
 interface HeaderProps {
@@ -9,8 +9,6 @@ interface HeaderProps {
   activeDatabaseName?: string;
   nominalGrid: number;
   analysisMode: EnfAnalysisMode;
-  onRun2017Simulation: () => void;
-  isLoadingSimulation: boolean;
   onOpenUploadModal: () => void;
 }
 
@@ -19,8 +17,6 @@ export const Header: React.FC<HeaderProps> = ({
   activeDatabaseName,
   nominalGrid,
   analysisMode,
-  onRun2017Simulation,
-  isLoadingSimulation,
   onOpenUploadModal,
 }) => {
   const [showDocs, setShowDocs] = useState(false);
@@ -43,7 +39,7 @@ export const Header: React.FC<HeaderProps> = ({
               </h1>
             </div>
             <p className="text-[11px] text-slate-400">
-              Multi-Modal Electrical Network Frequency Audio & Rolling-Shutter Optical Authenticator
+              Multi-Modal Electrical Network Frequency Video & Audio Authenticator (Continental Europe / Morocco ONEE 50 Hz)
             </p>
           </div>
         </div>
@@ -53,8 +49,8 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Active Grid Badge */}
           <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono bg-slate-900 border border-slate-800 text-slate-300">
             <Globe2 className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-            <span className="text-slate-500 text-[10px] uppercase font-semibold">Zone:</span>
-            <span className="text-cyan-300 font-semibold truncate max-w-[180px]" title={activeDatabaseName}>
+            <span className="text-slate-500 text-[10px] uppercase font-semibold">Grid:</span>
+            <span className="text-cyan-300 font-semibold truncate max-w-[200px]" title={activeDatabaseName}>
               {nominalGrid === 50 ? "CE / Morocco ONEE 50Hz" : "US / NERC 60Hz"}
             </span>
           </div>
@@ -75,29 +71,14 @@ export const Header: React.FC<HeaderProps> = ({
             {backendOnline ? "DSP Engine Ready" : "DSP Connecting..."}
           </div>
 
-          {/* 2017 Zouz Vlogs Simulation Button */}
-          <button
-            onClick={onRun2017Simulation}
-            disabled={isLoadingSimulation || !backendOnline}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white shadow-md shadow-emerald-950/60 border border-emerald-400/40 transition-all disabled:opacity-50 cursor-pointer"
-            title="Runs full 2017-11-09 04:58:19 AM Africa/Casablanca simulation"
-          >
-            {isLoadingSimulation ? (
-              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
-            )}
-            <span>Run 2017 Zouz Vlogs Simulation</span>
-          </button>
-
-          {/* Upload Grid CSV */}
+          {/* Choose / Download Grid Year Button */}
           <button
             onClick={onOpenUploadModal}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
-            title="Ingest Zenodo or custom grid CSV"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-950/50 border border-emerald-400/40 transition-colors cursor-pointer"
+            title="Choose year and auto-download historical grid dataset"
           >
-            <Database className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Grid Data</span>
+            <CloudDownload className="w-3.5 h-3.5" />
+            <span>Choose / Download Grid Year</span>
           </button>
 
           {/* Specs / Theory Modal */}
@@ -120,12 +101,18 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
           <div className="flex items-center gap-1.5">
             <Layers className="w-3.5 h-3.5 text-cyan-400" />
-            <span>STFT: <strong className="text-slate-200">8x Zero-Padded Parabolic</strong></span>
+            <span>STFT: <strong className="text-slate-200">8x Zero-Padded Parabolic (mHz Precision)</strong></span>
           </div>
           <div className="flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-purple-400" />
             <span>Modality: <strong className="text-slate-200 uppercase">{analysisMode}</strong></span>
           </div>
+          {activeDatabaseName && (
+            <div className="flex items-center gap-1.5">
+              <Database className="w-3.5 h-3.5 text-amber-400" />
+              <span>Loaded Reference: <strong className="text-amber-300">{activeDatabaseName}</strong></span>
+            </div>
+          )}
         </div>
         <div className="hidden md:flex items-center gap-3 text-slate-500">
           <span>Shortcuts: <kbd className="bg-slate-800 text-slate-300 px-1 rounded text-[10px]">Space</kbd> Play/Pause</span>
@@ -153,7 +140,7 @@ export const Header: React.FC<HeaderProps> = ({
               <div>
                 <h4 className="font-semibold text-emerald-300 text-sm mb-1 flex items-center gap-1.5">
                   <Radio className="w-4 h-4" />
-                  1. Acoustic ENF (100 Hz Mains Hum)
+                  1. Acoustic ENF (100 Hz Mains Hum from Audio)
                 </h4>
                 <p>
                   AC power supplies in 50 Hz grids (Europe & Morocco ONEE) utilize full-wave diode bridges that emit acoustic
