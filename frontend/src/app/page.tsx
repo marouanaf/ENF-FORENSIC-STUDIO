@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Header } from "../components/Header";
 import { MediaInspector } from "../components/MediaInspector";
 import { ConfigPanel } from "../components/ConfigPanel";
@@ -25,7 +25,7 @@ import {
   MatchResponse,
   MediaInfo,
 } from "../lib/types";
-import { AlertCircle, CheckCircle, ShieldCheck, Zap, FileText } from "lucide-react";
+import { AlertCircle, CheckCircle, ShieldCheck, Zap, FileText, Sparkles } from "lucide-react";
 
 export default function ForensicWorkstationPage() {
   // Backend & Databases
@@ -57,7 +57,9 @@ export default function ForensicWorkstationPage() {
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [notification, setNotification] = useState<{ type: "success" | "error" | "info"; msg: string } | null>(null);
 
-  // Initialize and poll health & databases
+  const initialSimulationTriggered = useRef(false);
+
+  // Fetch databases list
   const refreshDatabases = useCallback(async () => {
     try {
       const dbs = await fetchDatabases();
@@ -70,87 +72,19 @@ export default function ForensicWorkstationPage() {
     }
   }, [selectedDatabaseId]);
 
-  useEffect(() => {
-    const init = async () => {
-      try {
-        await checkHealth();
-        setBackendOnline(true);
-        await refreshDatabases();
-      } catch {
-        setBackendOnline(false);
-      }
-    };
-    init();
-    const interval = setInterval(init, 5000);
-    return () => clearInterval(interval);
-  }, [refreshDatabases]);
-
   const showNotification = (type: "success" | "error" | "info", msg: string) => {
     setNotification({ type, msg });
     setTimeout(() => setNotification(null), 6000);
   };
 
-  // 1. Action: Extract ENF Signal (Acoustic, Optical, or Fusion)
-  const handleExtractEnf = async () => {
-    if (!mediaInfo) return;
-    setIsExtracting(true);
-    setMatchResult(null);
-    try {
-      const res = await extractEnfMultiModal({
-        media_id: mediaInfo.media_id,
-        start_sec: roiStart,
-        end_sec: roiStart + roiDuration,
-        mode: analysisMode,
-        nominal_grid_hz: nominalGrid,
-        harmonic: harmonicMultiplier,
-        window_seconds: windowDuration,
-      });
-      setExtractionResult(res);
-      showNotification(
-        "success",
-        `Extracted ${res.trace.sample_count} points via ${res.selected_modality?.toUpperCase() || res.mode.toUpperCase()} (Mean SNR: +${res.trace.mean_snr_db.toFixed(1)} dB)`
-      );
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Extraction failed";
-      showNotification("error", msg);
-    } finally {
-      setIsExtracting(false);
-    }
-  };
-
-  // 2. Action: Execute Database Correlation Search
-  const handleMatchDatabase = async () => {
-    if (!extractionResult) return;
-    setIsMatching(true);
-    try {
-      const res = await matchDatabase({
-        media_id: mediaInfo?.media_id,
-        query_enf: extractionResult.trace.normalized_enf,
-        database_id: selectedDatabaseId || undefined,
-        top_k: 5,
-        min_separation_sec: 300,
-      });
-      setMatchResult(res);
-      setSelectedRank(1);
-      showNotification(
-        "success",
-        `Correlated! Matched ${res.best_match.casablanca_time || res.best_match.start_timestamp_utc} (r = ${res.best_match.pearson_r.toFixed(4)}, RMSE: ${res.best_match.rmse_mhz.toFixed(2)} mHz)`
-      );
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Matching failed";
-      showNotification("error", msg);
-    } finally {
-      setIsMatching(false);
-    }
-  };
-
-  // 3. Action: Run 2017 Zouz Vlogs Forensic Simulation (04:58:19 AM Casablanca)
-  const handleRun2017Simulation = async () => {
+  // Run 2017 Zouz Vlogs Forensic Simulation (04:58:19 AM Casablanca)
+  const handleRun2017Simulation = useCallback(async (isInitialAutoLoad: boolean = false) => {
     setIsLoadingSimulation(true);
-    setExtractionResult(null);
-    setMatchResult(null);
     try {
-      showNotification("info", "Synthesizing 2017-11-09 Morocco ONEE 50Hz grid & media hum at 04:58:19 AM Casablanca...");
+      if (!isInitialAutoLoad) {
+        showNotification("info", "Synthesizing 2017-11-09 Morocco ONEE 50Hz grid & media hum at 04:58:19 AM Casablanca...");
+      }
+
       const sim = await run2017ZouzSimulation();
       await refreshDatabases();
 
@@ -186,15 +120,100 @@ export default function ForensicWorkstationPage() {
       setMatchResult(sim.match);
       setSelectedRank(1);
 
-      showNotification(
-        "success",
-        `★ AUTHENTICATED MATCH! 2017 Zouz Vlogs timestamped to: ${sim.match.best_match.casablanca_time} (r = ${sim.match.best_match.pearson_r.toFixed(4)})!`
-      );
+      if (!isInitialAutoLoad) {
+        showNotification(
+          "success",
+          `★ AUTHENTICATED! 2017 Zouz Vlogs timestamped to: ${sim.match.best_match.casablanca_time} (r = ${sim.match.best_match.pearson_r.toFixed(4)})!`
+        );
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Simulation failed";
       showNotification("error", msg);
     } finally {
       setIsLoadingSimulation(false);
+    }
+  }, [refreshDatabases]);
+
+  // Initial mount health check & auto-load simulation if empty
+  useEffect(() => {
+    const init = async () => {
+      try {
+        await checkHealth();
+        setBackendOnline(true);
+        await refreshDatabases();
+
+        // Auto-load 2017 Moroccan forensic simulation on first load so user immediately sees full dashboard
+        if (!initialSimulationTriggered.current) {
+          initialSimulationTriggered.current = true;
+          handleRun2017Simulation(true);
+        }
+      } catch {
+        setBackendOnline(false);
+      }
+    };
+    init();
+    const interval = setInterval(async () => {
+      try {
+        await checkHealth();
+        setBackendOnline(true);
+      } catch {
+        setBackendOnline(false);
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [refreshDatabases, handleRun2017Simulation]);
+
+  // Action: Extract ENF Signal (Acoustic, Optical, or Fusion)
+  const handleExtractEnf = async () => {
+    if (!mediaInfo) return;
+    setIsExtracting(true);
+    setMatchResult(null);
+    try {
+      const res = await extractEnfMultiModal({
+        media_id: mediaInfo.media_id,
+        start_sec: roiStart,
+        end_sec: roiStart + roiDuration,
+        mode: analysisMode,
+        nominal_grid_hz: nominalGrid,
+        harmonic: harmonicMultiplier,
+        window_seconds: windowDuration,
+      });
+      setExtractionResult(res);
+      showNotification(
+        "success",
+        `Extracted ${res.trace.sample_count} points via ${res.selected_modality?.toUpperCase() || res.mode.toUpperCase()} (Mean SNR: +${res.trace.mean_snr_db.toFixed(1)} dB)`
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Extraction failed";
+      showNotification("error", msg);
+    } finally {
+      setIsExtracting(false);
+    }
+  };
+
+  // Action: Execute Database Correlation Search
+  const handleMatchDatabase = async () => {
+    if (!extractionResult) return;
+    setIsMatching(true);
+    try {
+      const res = await matchDatabase({
+        media_id: mediaInfo?.media_id,
+        query_enf: extractionResult.trace.normalized_enf,
+        database_id: selectedDatabaseId || undefined,
+        top_k: 5,
+        min_separation_sec: 300,
+      });
+      setMatchResult(res);
+      setSelectedRank(1);
+      showNotification(
+        "success",
+        `Correlated! Matched ${res.best_match.casablanca_time || res.best_match.start_timestamp_utc} (r = ${res.best_match.pearson_r.toFixed(4)}, RMSE: ${res.best_match.rmse_mhz.toFixed(2)} mHz)`
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Matching failed";
+      showNotification("error", msg);
+    } finally {
+      setIsMatching(false);
     }
   };
 
@@ -208,7 +227,7 @@ export default function ForensicWorkstationPage() {
         activeDatabaseName={activeDbInfo?.filename}
         nominalGrid={nominalGrid}
         analysisMode={analysisMode}
-        onRun2017Simulation={handleRun2017Simulation}
+        onRun2017Simulation={() => handleRun2017Simulation(false)}
         isLoadingSimulation={isLoadingSimulation}
         onOpenUploadModal={() => setUploadModalOpen(true)}
       />
