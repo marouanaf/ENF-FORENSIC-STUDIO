@@ -139,8 +139,8 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
         </div>
 
         {/* Year Pills */}
-        <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5">
-          {[2017, 2018, 2019, 2020, 2021, 2022, 2024].map((year) => {
+        <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5">
+          {[2017, 2018, 2019, 2020, 2021, 2022, 2024, 2026].map((year) => {
             const hasData = databases.some(
               (d) => d.filename.includes(String(year)) || d.start_time_utc?.startsWith(String(year))
             );

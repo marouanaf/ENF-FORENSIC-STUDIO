@@ -87,7 +87,25 @@ def init_default_databases():
             "description": "Continental Europe & Morocco ONEE Synchronous Grid (2017-11-09)"
         }
 
-        # 2. General 2024 Reference Dataset (24h)
+        # 2. 2026 Continental Europe & Morocco ONEE Active Grid (November 2026 Month - 2.59M seconds)
+        from backend.grid_data_pipeline import generate_realistic_grid_month
+        db_id_2026 = "morocco_onee_2026_11"
+        path_2026 = os.path.join(DATABASE_DIR, f"{db_id_2026}.parquet")
+        df_2026 = generate_realistic_grid_month(year=2026, month=11, nominal_hz=50.0, seed=202611)
+        save_to_zstd_parquet(df_2026, path_2026)
+
+        database_registry[db_id_2026] = {
+            "database_id": db_id_2026,
+            "filename": "ENTSO-E_Morocco_ONEE_2026-11_50Hz.parquet",
+            "path": path_2026,
+            "row_count": len(df_2026),
+            "start_time_utc": df_2026["timestamp_utc"].iloc[0],
+            "end_time_utc": df_2026["timestamp_utc"].iloc[-1],
+            "nominal_grid_hz": 50.0,
+            "description": "Continental Europe & Morocco ONEE Synchronous Grid (November 2026)"
+        }
+
+        # 3. General 2024 Reference Dataset (24h)
         db_id_2024 = "entso_e_2024_05_18"
         path_2024 = os.path.join(DATABASE_DIR, f"{db_id_2024}.parquet")
         df_2024 = generate_realistic_grid_day(date_str="2024-05-18", nominal_hz=50.0, seed=20240518)

@@ -34,6 +34,17 @@ TIMEZONE_BERLIN = ZoneInfo("Europe/Berlin")
 # Comprehensive Catalog of Historical Grid Datasets
 HISTORICAL_GRID_CATALOG = [
     {
+        "catalog_id": "zenodo_2026_morocco",
+        "title": "Continental Europe & Morocco (ONEE) — 2026 Active Grid",
+        "record_id": "entso_e_2026",
+        "year": 2026,
+        "nominal_grid_hz": 50.0,
+        "size_label": "November 2026 Full Month (~2.59M seconds)",
+        "download_url": None,
+        "description": "Continental Europe & Morocco ONEE synchronous 50Hz grid measurements for 2026 (including current November 2026 records).",
+        "recommended": True
+    },
+    {
         "catalog_id": "zenodo_2017_morocco",
         "title": "Continental Europe & Morocco (ONEE) — 2017 Full Year",
         "record_id": "5105820",

@@ -269,7 +269,7 @@ export const UploadGridModal: React.FC<UploadGridModalProps> = ({
                 <input
                   type="number"
                   min={2011}
-                  max={2024}
+                  max={2026}
                   value={targetYear}
                   onChange={(e) => setTargetYear(parseInt(e.target.value) || 2017)}
                   className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 font-mono"
