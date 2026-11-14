@@ -20,10 +20,26 @@ export async function uploadMedia(file: File): Promise<MediaInfo> {
   const formData = new FormData();
   formData.append("file", file);
 
-  const res = await fetch(`${API_BASE}/api/upload-media`, {
-    method: "POST",
-    body: formData,
-  });
+  let res: Response;
+  try {
+    res = await fetch("/api/upload-media", {
+      method: "POST",
+      body: formData,
+    });
+    if (res.status === 413 || res.status === 502 || res.status === 504) {
+      throw new Error(`Proxy status ${res.status}`);
+    }
+  } catch {
+    // Seamless fallback to direct backend port if Next.js proxy timed out on large files
+    try {
+      res = await fetch("http://127.0.0.1:8000/api/upload-media", {
+        method: "POST",
+        body: formData,
+      });
+    } catch {
+      throw new Error("Failed to upload media: file transfer interrupted.");
+    }
+  }
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));

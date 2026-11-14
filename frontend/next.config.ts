@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    proxyClientMaxBodySize: "1000mb",
+    proxyTimeout: 300000,
+  },
   turbopack: {
     rules: {
       "*.css": {
