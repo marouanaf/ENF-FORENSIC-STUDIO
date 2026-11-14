@@ -129,13 +129,15 @@ export const VerdictBanner: React.FC<VerdictBannerProps> = ({ matchResult }) => 
 
         {/* Statistical Telemetry Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-          {/* Pearson Correlation */}
+          {/* Pearson Correlation & Micro-Wiggles */}
           <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3">
             <span className="text-[10px] text-slate-400 block font-mono">PEARSON COEFF (r)</span>
             <span className="text-xl font-black font-mono text-emerald-400 mt-0.5 block">
               {best_match.pearson_r.toFixed(4)}
             </span>
-            <span className="text-[9px] text-slate-500 font-mono">Max Theoretical: 1.0</span>
+            <span className="text-[9px] text-cyan-400 font-mono">
+              {best_match.diff_r !== undefined ? `Δf wiggles: r = ${best_match.diff_r.toFixed(3)}` : "Max: 1.0"}
+            </span>
           </div>
 
           {/* Root Mean Square Error */}

@@ -109,6 +109,8 @@ export interface MatchCandidate {
   casablanca_time_only: string;
   casablanca_date_only: string;
   pearson_r: number;
+  diff_r?: number;
+  forensic_score?: number;
   mse: number;
   rmse_mhz: number;
   relative_z_score: number;

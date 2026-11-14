@@ -724,10 +724,14 @@ class ENFEngine:
         min_separation_sec: int = 300
     ) -> Dict[str, Any]:
         """
-        Vectorized sliding window FFT Normalized Cross-Correlation (NCC) and minimum MSE matching.
+        Hardened Multi-Scale Vectorized FFT Cross-Correlation & Minimum MSE Matching.
         
-        Slides the extracted frequency array across the historical grid dataset in O(N log N)
-        using FFT convolution to find the exact second with minimum MSE and maximum correlation.
+        Evaluates both:
+        1. Macro-trend correlation (r_raw).
+        2. Second-by-second micro-fluctuation correlation (r_diff on first-order differences).
+        3. Strict physical consistency penalty based on Root Mean Square Error (RMSE).
+        
+        Prevents coincidental slope false-positives across different years.
         """
         x = np.asarray(query_enf, dtype=np.float64)
         L = len(x)
@@ -747,15 +751,11 @@ class ENFEngine:
         if N < L:
             raise ValueError(f"Reference database length ({N}s) is shorter than query ({L}s).")
 
-        # 1. Z-score normalize query vector x
-        x_mean = np.mean(x)
-        x_zero = x - x_mean
+        # 1. Raw FFT cross-correlation (macro trend)
+        x_zero = x - np.mean(x)
         x_norm = np.linalg.norm(x_zero)
-        if x_norm < 1e-12:
-            x_norm = 1e-12
-        x_hat = x_zero / x_norm
+        x_hat = x_zero / (x_norm + 1e-12)
 
-        # 2. Cumulative sums of y and y^2 for exact O(N) sliding-window variance and MSE
         cs_y = np.pad(np.cumsum(y), (1, 0))
         cs_y2 = np.pad(np.cumsum(y ** 2), (1, 0))
 
@@ -765,19 +765,52 @@ class ENFEngine:
         w_var = np.maximum(w_sum2 / L - w_mean ** 2, 1e-14)
         w_norm = np.sqrt(w_var * L)
 
-        # 3. FFT convolution cross-correlation in O(N log N) via scipy.signal.fftconvolve
-        cross_dot = fftconvolve(y, x_hat[::-1], mode="valid")
-        r_curve = np.clip(cross_dot / (w_norm + 1e-12), -1.0, 1.0)
+        cross_raw_dot = fftconvolve(y, x_hat[::-1], mode="valid")
+        r_raw_curve = np.clip(cross_raw_dot / (w_norm + 1e-12), -1.0, 1.0)
 
-        # 4. Exact sliding Mean Squared Error (MSE in Hz²) across all sliding windows
-        cross_raw = fftconvolve(y, x[::-1], mode="valid")
-        mse_curve = np.mean(x ** 2) - (2.0 / L) * cross_raw + (w_sum2 / L)
+        # 2. Difference FFT cross-correlation (micro-wiggles: first-order differences)
+        dx = np.diff(x)
+        dx_zero = dx - np.mean(dx)
+        dx_norm = np.linalg.norm(dx_zero)
+        dx_hat = dx_zero / (dx_norm + 1e-12)
+
+        dy = np.diff(y)
+        L_d = len(dx)
+        cs_dy = np.pad(np.cumsum(dy), (1, 0))
+        cs_dy2 = np.pad(np.cumsum(dy ** 2), (1, 0))
+
+        w_dsum = cs_dy[L_d:] - cs_dy[:-L_d]
+        w_dsum2 = cs_dy2[L_d:] - cs_dy2[:-L_d]
+        w_dmean = w_dsum / L_d
+        w_dvar = np.maximum(w_dsum2 / L_d - w_dmean ** 2, 1e-14)
+        w_dnorm = np.sqrt(w_dvar * L_d)
+
+        cross_diff_dot = fftconvolve(dy, dx_hat[::-1], mode="valid")
+        r_diff_curve = np.clip(cross_diff_dot / (w_dnorm + 1e-12), -1.0, 1.0)
+
+        # 3. Exact sliding Mean Squared Error (MSE in Hz²) and RMSE (in mHz)
+        cross_raw_unnorm = fftconvolve(y, x[::-1], mode="valid")
+        mse_curve = np.mean(x ** 2) - (2.0 / L) * cross_raw_unnorm + (w_sum2 / L)
         mse_curve = np.maximum(mse_curve, 0.0)
+        rmse_mhz_curve = np.sqrt(mse_curve) * 1000.0
 
-        num_windows = len(r_curve)
+        min_len = min(len(r_raw_curve), len(r_diff_curve), len(rmse_mhz_curve))
+        r_raw_curve = r_raw_curve[:min_len]
+        r_diff_curve = r_diff_curve[:min_len]
+        rmse_mhz_curve = rmse_mhz_curve[:min_len]
+        mse_curve = mse_curve[:min_len]
 
-        # 5. Independent Peak Finding (minimum separation = 300s)
-        sorted_indices = np.argsort(-r_curve)
+        # 4. Multi-Scale Composite Score with Physical Consistency Penalty
+        comp_r_curve = 0.35 * r_raw_curve + 0.65 * r_diff_curve
+        # Physical consistency: in a synchronous grid, true RMSE is < 8 mHz.
+        # Demotes cross-year coincidental slopes where RMSE is large (e.g. >15 mHz).
+        consistency_penalty = np.exp(-rmse_mhz_curve / 12.0)
+        forensic_score_curve = comp_r_curve * consistency_penalty
+
+        num_windows = min_len
+
+        # 5. Independent Peak Finding (using forensic_score_curve)
+        sorted_indices = np.argsort(-forensic_score_curve)
         selected_indices = []
 
         for idx in sorted_indices:
@@ -790,9 +823,11 @@ class ENFEngine:
             selected_indices = [int(sorted_indices[0])]
 
         best_idx = selected_indices[0]
-        best_r = float(r_curve[best_idx])
+        best_r = float(r_raw_curve[best_idx])
+        best_rdiff = float(r_diff_curve[best_idx])
+        best_score = float(forensic_score_curve[best_idx])
         best_mse = float(mse_curve[best_idx])
-        best_rmse_mhz = float(np.sqrt(best_mse) * 1000.0)
+        best_rmse_mhz = float(rmse_mhz_curve[best_idx])
 
         # 6. Statistical Z-Score vs. Background Noise Floor
         noise_mask = np.ones(num_windows, dtype=bool)
@@ -800,42 +835,45 @@ class ENFEngine:
         mask_end = min(num_windows, best_idx + max(L, min_separation_sec) + 1)
         noise_mask[mask_start:mask_end] = False
 
-        noise_r = r_curve[noise_mask]
-        if len(noise_r) > 10:
-            mu_noise = float(np.mean(noise_r))
-            sigma_noise = float(np.std(noise_r))
-            z_score = float((best_r - mu_noise) / max(sigma_noise, 1e-6))
+        noise_scores = forensic_score_curve[noise_mask]
+        if len(noise_scores) > 10:
+            mu_noise = float(np.mean(noise_scores))
+            sigma_noise = float(np.std(noise_scores))
+            z_score = float((best_score - mu_noise) / max(sigma_noise, 1e-6))
         else:
             mu_noise = 0.0
             sigma_noise = 0.1
-            z_score = 10.0 if best_r > 0.8 else 2.0
+            z_score = 10.0 if best_score > 0.6 else 2.0
 
-        second_r = float(r_curve[selected_indices[1]]) if len(selected_indices) > 1 else 0.0
+        second_score = float(forensic_score_curve[selected_indices[1]]) if len(selected_indices) > 1 else 0.0
         second_mse = float(mse_curve[selected_indices[1]]) if len(selected_indices) > 1 else (best_mse * 2.0)
-        delta_r = best_r - second_r
+        delta_score = best_score - second_score
         mse_ratio = second_mse / max(best_mse, 1e-12)
 
-        # Forensic Classification
-        if (best_r >= 0.85 and (best_rmse_mhz <= 15.0 or z_score >= 2.0 or delta_r >= 0.03)) or best_r >= 0.95:
+        # 7. Strict Multi-Scale Forensic Classification:
+        # Requires BOTH macro-shape correlation (best_r >= 0.88), micro-wiggles correlation (best_rdiff >= 0.60),
+        # AND strict physical alignment (RMSE <= 10.0 mHz).
+        if best_score >= 0.70 and best_rdiff >= 0.60 and best_rmse_mhz <= 10.0:
             verdict = "AUTHENTICATED"
             verdict_badge = "CONFIRMED FORENSIC MATCH"
             verdict_color = "emerald"
-            confidence_pct = min(99.9, max(95.0, 92.0 + (best_r - 0.85) * 50.0 + min(mse_ratio, 10.0) * 0.2))
-        elif best_r >= 0.70:
+            confidence_pct = min(99.9, max(92.0, best_score * 100.0 + min(z_score, 10.0) * 0.5))
+        elif best_score >= 0.50 and best_rmse_mhz <= 14.0:
             verdict = "PROBABLE MATCH"
-            verdict_badge = "HIGH PROBABILITY"
+            verdict_badge = "PROBABLE MATCH"
             verdict_color = "cyan"
-            confidence_pct = min(94.9, max(75.0, 70.0 + (best_r - 0.70) * 60.0))
-        elif best_r >= 0.50:
-            verdict = "INCONCLUSIVE"
-            verdict_badge = "LOW CONFIDENCE"
-            verdict_color = "amber"
-            confidence_pct = min(74.0, max(45.0, 40.0 + best_r * 50.0))
+            confidence_pct = min(89.9, max(70.0, best_score * 90.0))
+        elif best_r >= 0.70:
+            # False positive rejection: high raw slope coincidence, but micro-wiggles or RMSE mismatched!
+            verdict = "SPURIOUS CORRELATION (WRONG YEAR/GRID)"
+            verdict_badge = "COINCIDENTAL SLOPE / REJECTED"
+            verdict_color = "rose"
+            confidence_pct = max(5.0, (1.0 - min(1.0, best_rmse_mhz / 40.0)) * 25.0)
         else:
             verdict = "UNAUTHENTICATED"
             verdict_badge = "NO CORRELATION / LOW SNR"
             verdict_color = "rose"
-            confidence_pct = max(5.0, best_r * 40.0)
+            confidence_pct = max(5.0, best_score * 20.0)
 
         # Candidate records
         candidates = []
@@ -844,9 +882,11 @@ class ENFEngine:
             t_end_utc = timestamps_utc[idx + L - 1]
             tz_info = convert_to_dual_timezones(t_start_utc)
 
-            c_r = float(r_curve[idx])
+            c_r = float(r_raw_curve[idx])
+            c_rdiff = float(r_diff_curve[idx])
+            c_score = float(forensic_score_curve[idx])
             c_mse = float(mse_curve[idx])
-            c_rmse_mhz = float(np.sqrt(c_mse) * 1000.0)
+            c_rmse_mhz = float(rmse_mhz_curve[idx])
 
             candidates.append({
                 "rank": rank,
@@ -861,9 +901,11 @@ class ENFEngine:
                 "casablanca_time_only": tz_info["casablanca_time_only"],
                 "casablanca_date_only": tz_info["casablanca_date_only"],
                 "pearson_r": round(c_r, 6),
+                "diff_r": round(c_rdiff, 6),
+                "forensic_score": round(c_score, 6),
                 "mse": round(c_mse, 8),
                 "rmse_mhz": round(c_rmse_mhz, 3),
-                "relative_z_score": round(float((c_r - mu_noise) / max(sigma_noise, 1e-6)), 2)
+                "relative_z_score": round(float((c_score - mu_noise) / max(sigma_noise, 1e-6)), 2)
             })
 
         # Dual-Signal Overlay for Best Match
@@ -899,7 +941,9 @@ class ENFEngine:
                 "gmt_time": tz_u["gmt_formatted"],
                 "gmt_time_only": tz_u["gmt_time_only"],
                 "casablanca_time": tz_u["casablanca_time_only"],
-                "pearson_r": round(float(r_curve[idx]), 5),
+                "pearson_r": round(float(r_raw_curve[idx]), 5),
+                "diff_r": round(float(r_diff_curve[idx]), 5),
+                "forensic_score": round(float(forensic_score_curve[idx]), 5),
                 "mse": round(float(mse_curve[idx]), 6),
                 "is_best": bool(idx == best_idx)
             })
@@ -919,7 +963,10 @@ class ENFEngine:
                 "relative_sec": int(idx - best_idx),
                 "index": int(idx),
                 "timestamp_utc": t_u,
-                "pearson_r": round(float(r_curve[idx]), 4),
+                "gmt_time": t_u.replace("T", " ").replace("Z", " GMT"),
+                "pearson_r": round(float(r_raw_curve[idx]), 4),
+                "diff_r": round(float(r_diff_curve[idx]), 4),
+                "forensic_score": round(float(forensic_score_curve[idx]), 4),
                 "mse": round(float(mse_curve[idx]), 6),
                 "is_best": bool(idx == best_idx)
             })
@@ -943,6 +990,6 @@ class ENFEngine:
             "noise_floor_mu": round(mu_noise, 4),
             "noise_floor_sigma": round(sigma_noise, 4),
             "z_score": round(z_score, 2),
-            "delta_r_to_second": round(delta_r, 4),
+            "delta_r_to_second": round(delta_score, 4),
             "mse_ratio_to_second": round(mse_ratio, 2)
         }
