@@ -27,7 +27,7 @@ export const CandidatesTable: React.FC<CandidatesTableProps> = ({
           </h3>
         </div>
         <span className="text-[11px] font-mono text-slate-400">
-          Ranked by Pearson r (≥300s window separation)
+          Ranked by Pearson r (Timing standardized in GMT)
         </span>
       </div>
 
@@ -36,8 +36,8 @@ export const CandidatesTable: React.FC<CandidatesTableProps> = ({
           <thead>
             <tr className="border-b border-slate-800 text-slate-400 text-[11px]">
               <th className="py-2.5 px-3">Rank</th>
-              <th className="py-2.5 px-3">Africa/Casablanca Time</th>
-              <th className="py-2.5 px-3">Universal Time (UTC)</th>
+              <th className="py-2.5 px-3">Matched Date & Time (GMT)</th>
+              <th className="py-2.5 px-3">Casablanca Time</th>
               <th className="py-2.5 px-3 text-right">Pearson r</th>
               <th className="py-2.5 px-3 text-right">RMSE (mHz)</th>
               <th className="py-2.5 px-3 text-right">MSE (Hz²)</th>
@@ -48,6 +48,7 @@ export const CandidatesTable: React.FC<CandidatesTableProps> = ({
             {candidates.map((cand) => {
               const isFirst = cand.rank === 1;
               const isSelected = cand.rank === selectedRank;
+              const gmtDisplay = cand.gmt_time || `${cand.start_timestamp_utc.replace("T", " ").replace("Z", "")} GMT`;
 
               return (
                 <tr
@@ -69,13 +70,13 @@ export const CandidatesTable: React.FC<CandidatesTableProps> = ({
                     )}
                   </td>
                   <td className="py-2.5 px-3 font-semibold text-emerald-300">
-                    <span className="flex items-center gap-1">
+                    <span className="flex items-center gap-1.5">
                       <Clock className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                      {cand.casablanca_time || cand.start_timestamp_utc}
+                      <span>{gmtDisplay}</span>
                     </span>
                   </td>
-                  <td className="py-2.5 px-3 text-slate-400">
-                    {cand.start_timestamp_utc}
+                  <td className="py-2.5 px-3 text-slate-300">
+                    {cand.casablanca_time || cand.start_timestamp_utc}
                   </td>
                   <td className="py-2.5 px-3 text-right font-bold text-emerald-400">
                     {cand.pearson_r.toFixed(5)}

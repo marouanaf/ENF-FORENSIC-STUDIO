@@ -134,8 +134,8 @@ export const CorrelationCurveChart: React.FC<CorrelationCurveChartProps> = ({
                             : `Lag Offset: ${pt.relative_sec > 0 ? `+${pt.relative_sec}` : pt.relative_sec}s`
                           : `Index: +${pt.index}s`}
                       </div>
-                      <div className="text-slate-300">
-                        UTC: <span className="font-semibold">{pt.timestamp_utc}</span>
+                      <div className="text-emerald-300 font-bold">
+                        GMT: <span className="font-semibold">{pt.gmt_time || pt.timestamp_utc}</span>
                       </div>
                       {pt.casablanca_time && (
                         <div className="text-emerald-300">

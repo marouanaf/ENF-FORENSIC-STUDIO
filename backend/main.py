@@ -467,6 +467,7 @@ def match_database(req: MatchDatabaseRequest):
                 "filename": d_info["filename"],
                 "peak_r": best_c["pearson_r"],
                 "rmse_mhz": best_c["rmse_mhz"],
+                "matched_gmt": best_c.get("gmt_time", best_c["start_timestamp_utc"]),
                 "matched_casablanca_time": best_c["casablanca_time"],
                 "matched_utc": best_c["start_timestamp_utc"],
                 "verdict": m_res["verdict"],

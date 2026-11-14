@@ -19,7 +19,6 @@ export const VerdictBanner: React.FC<VerdictBannerProps> = ({ matchResult }) => 
     z_score,
     search_window_seconds,
     database_total_seconds,
-    database_filename,
   } = matchResult;
 
   const colorStyles = {
@@ -64,6 +63,8 @@ export const VerdictBanner: React.FC<VerdictBannerProps> = ({ matchResult }) => 
     accentText: "text-emerald-400",
   };
 
+  const gmtTimestamp = best_match.gmt_time || best_match_timezone?.gmt_formatted || `${best_match.start_timestamp_utc.replace("T", " ").replace("Z", "")} GMT`;
+
   return (
     <div
       className={`border ${colorStyles.border} ${colorStyles.bg} ${colorStyles.glow} rounded-2xl p-6 backdrop-blur-xl shadow-2xl relative overflow-hidden`}
@@ -90,31 +91,31 @@ export const VerdictBanner: React.FC<VerdictBannerProps> = ({ matchResult }) => 
             </div>
           </div>
 
-          {/* Primary Matched Timestamp Banner (Africa/Casablanca & UTC) */}
+          {/* Primary Matched Timing Banner in GMT */}
           <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center gap-6 text-xs font-mono">
-            {/* Africa/Casablanca Time */}
+            {/* Primary GMT Date & Time */}
             <div>
               <span className="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">
-                AUTHENTICATED CASABLANCA TIME
+                AUTHENTICATED DATE & TIME (GMT)
               </span>
               <span className="text-base font-extrabold text-emerald-400 flex items-center gap-1.5 mt-1">
                 <Clock className="w-4 h-4 text-emerald-400" />
+                {gmtTimestamp}
+              </span>
+            </div>
+
+            {/* Casablanca Local Offset */}
+            <div className="border-l border-slate-800 pl-6">
+              <span className="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">
+                CASABLANCA (LOCAL TIME)
+              </span>
+              <span className="text-sm font-semibold text-slate-200 flex items-center gap-1.5 mt-1">
+                <Globe2 className="w-4 h-4 text-cyan-400" />
                 {best_match.casablanca_time || best_match_timezone?.casablanca_formatted}
               </span>
             </div>
 
-            {/* UTC Timestamp */}
-            <div className="border-l border-slate-800 pl-6">
-              <span className="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">
-                UNIVERSAL TIME (UTC)
-              </span>
-              <span className="text-sm font-semibold text-slate-200 flex items-center gap-1.5 mt-1">
-                <Globe2 className="w-4 h-4 text-cyan-400" />
-                {best_match.start_timestamp_utc}
-              </span>
-            </div>
-
-            {/* Timeline Span */}
+            {/* Window Span */}
             <div className="border-l border-slate-800 pl-6 hidden md:block">
               <span className="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">
                 WINDOW SPAN

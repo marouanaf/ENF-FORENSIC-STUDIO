@@ -4,6 +4,7 @@ export interface YearComparisonItem {
   filename: string;
   peak_r: number;
   rmse_mhz: number;
+  matched_gmt?: string;
   matched_casablanca_time: string;
   matched_utc: string;
   verdict: string;
@@ -84,6 +85,9 @@ export interface GridDatabaseInfo {
 }
 
 export interface DualTimezoneInfo {
+  gmt_formatted: string;
+  gmt_time_only: string;
+  gmt_date_only: string;
   utc_iso: string;
   casablanca_formatted: string;
   berlin_formatted: string;
@@ -98,6 +102,9 @@ export interface MatchCandidate {
   end_index: number;
   start_timestamp_utc: string;
   end_timestamp_utc: string;
+  gmt_time?: string;
+  gmt_time_only?: string;
+  gmt_date_only?: string;
   casablanca_time: string;
   casablanca_time_only: string;
   casablanca_date_only: string;
@@ -119,6 +126,7 @@ export interface CorrelationPoint {
   relative_sec?: number;
   index: number;
   timestamp_utc: string;
+  gmt_time?: string;
   casablanca_time?: string;
   pearson_r: number;
   mse: number;

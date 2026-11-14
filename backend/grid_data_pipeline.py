@@ -130,7 +130,7 @@ HISTORICAL_GRID_CATALOG = [
 
 def convert_to_dual_timezones(utc_timestamp: Union[str, pd.Timestamp, datetime]) -> Dict[str, str]:
     """
-    Converts a UTC timestamp to UTC, Africa/Casablanca, and Europe/Berlin strings.
+    Converts a timestamp to standardized GMT (Greenwich Mean Time), Africa/Casablanca, and UTC.
     Accurately accounts for Morocco's Ramadan shifts and 2018 DST reforms.
     """
     if isinstance(utc_timestamp, str):
@@ -146,13 +146,24 @@ def convert_to_dual_timezones(utc_timestamp: Union[str, pd.Timestamp, datetime])
     dt_casa = dt.tz_convert(TIMEZONE_CASABLANCA)
     dt_berlin = dt.tz_convert(TIMEZONE_BERLIN)
 
+    # Standard GMT formatting (Greenwich Mean Time / UTC+0)
+    gmt_str = dt.strftime("%Y-%m-%d %H:%M:%S GMT")
+    gmt_time_only = dt.strftime("%H:%M:%S GMT")
+    gmt_date_only = dt.strftime("%Y-%m-%d")
+
+    casa_offset = dt_casa.strftime("GMT%z")
+    casa_str = dt_casa.strftime(f"%Y-%m-%d %I:%M:%S %p Africa/Casablanca ({casa_offset})")
+
     return {
+        "gmt_formatted": gmt_str,
+        "gmt_time_only": gmt_time_only,
+        "gmt_date_only": gmt_date_only,
         "utc_iso": dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "casablanca_formatted": dt_casa.strftime("%Y-%m-%d %I:%M:%S %p Africa/Casablanca (UTC%z)"),
-        "berlin_formatted": dt_berlin.strftime("%Y-%m-%d %H:%M:%S Europe/Berlin (UTC%z)"),
+        "casablanca_formatted": casa_str,
+        "berlin_formatted": dt_berlin.strftime("%Y-%m-%d %H:%M:%S Europe/Berlin (GMT%z)"),
         "casablanca_time_only": dt_casa.strftime("%I:%M:%S %p"),
         "casablanca_date_only": dt_casa.strftime("%Y-%m-%d"),
-        "casablanca_tz_offset": dt_casa.strftime("UTC%z"),
+        "casablanca_tz_offset": casa_offset,
     }
 
 

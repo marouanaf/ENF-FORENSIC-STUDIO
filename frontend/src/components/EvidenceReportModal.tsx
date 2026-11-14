@@ -75,8 +75,11 @@ export const EvidenceReportModal: React.FC<EvidenceReportModalProps> = ({
               <span>Status: <span className="text-emerald-400">{verdict}</span></span>
               <span className="text-xs text-slate-400">Confidence: {confidence_pct}%</span>
             </div>
+            <div className="text-emerald-300 font-bold text-xs">
+              Authenticated Timing (GMT): <strong className="text-emerald-400">{best_match.gmt_time || best_match.start_timestamp_utc}</strong>
+            </div>
             <div className="text-slate-300">
-              Casablanca Time: <strong className="text-emerald-300">{best_match.casablanca_time}</strong>
+              Casablanca (Local): <strong>{best_match.casablanca_time}</strong>
             </div>
             <div className="text-slate-400">
               UTC Timestamp: <strong className="text-slate-200">{best_match.start_timestamp_utc}</strong>

@@ -84,9 +84,9 @@ export const YearComparisonChart: React.FC<YearComparisonChartProps> = ({
                 </div>
 
                 <div className="flex items-center gap-3 text-xs font-mono">
-                  <span className="text-slate-400 text-[11px] flex items-center gap-1">
-                    <Clock className="w-3 h-3 text-slate-500" />
-                    {item.matched_casablanca_time || item.matched_utc}
+                  <span className="text-slate-400 text-[11px] flex items-center gap-1 font-mono">
+                    <Clock className="w-3 h-3 text-emerald-400" />
+                    {item.matched_gmt || item.matched_utc}
                   </span>
                   <span
                     className={`font-black ${
