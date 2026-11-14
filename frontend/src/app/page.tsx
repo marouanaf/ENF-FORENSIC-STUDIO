@@ -162,6 +162,7 @@ export default function ForensicWorkstationPage() {
         database_ids: targetDbIds,
         top_k: 5,
         min_separation_sec: 300,
+        roi_start_sec: roiStart,
       });
 
       setMatchResult(mRes);
@@ -308,7 +309,7 @@ export default function ForensicWorkstationPage() {
             {matchResult && (
               <div className="space-y-6 animate-in fade-in duration-500">
                 {/* 1. Verdict Banner */}
-                <VerdictBanner matchResult={matchResult} />
+                <VerdictBanner matchResult={matchResult} activeCandidate={matchResult.top_candidates[selectedRank - 1]} />
 
                 {/* 2. Multi-Year Comparative Leaderboard (shows how the winning year stands out!) */}
                 {matchResult.year_comparison && matchResult.year_comparison.length > 1 && (

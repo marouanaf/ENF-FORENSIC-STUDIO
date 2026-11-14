@@ -180,6 +180,29 @@ export const MediaInspector: React.FC<MediaInspectorProps> = ({
             />
           </div>
 
+          {/* Camera Container Metadata Timestamp Card */}
+          {mediaInfo.detected_metadata_time && (
+            <div className="p-3 rounded-xl bg-slate-950/80 border border-emerald-500/50 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+              <div className="flex items-center gap-2.5">
+                <Clock className="w-4 h-4 text-emerald-400 shrink-0" />
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">
+                    Camera Header Creation Timestamp (EXIF/MP4 Container)
+                  </span>
+                  <span className="text-emerald-300 font-extrabold text-sm">
+                    {mediaInfo.detected_metadata_time.gmt_time}
+                  </span>
+                  <span className="text-slate-400 text-[11px] block mt-0.5">
+                    Local Time: {mediaInfo.detected_metadata_time.casablanca_time}
+                  </span>
+                </div>
+              </div>
+              <div className="text-[11px] text-cyan-300 bg-slate-900 px-2.5 py-1 rounded border border-slate-800">
+                Target Date: <strong className="text-white">{mediaInfo.detected_metadata_time.year}-{String(mediaInfo.detected_metadata_time.month).padStart(2, "0")}-{String(mediaInfo.detected_metadata_time.day).padStart(2, "0")}</strong>
+              </div>
+            </div>
+          )}
+
           {/* Modality Selector Tabs */}
           <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-3 space-y-2">
             <div className="flex items-center justify-between">

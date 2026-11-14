@@ -22,6 +22,17 @@ export interface MediaInfo {
   sample_rate?: number;
   waveform_peaks: number[];
   size_bytes: number;
+  detected_metadata_time?: {
+    utc_iso: string;
+    gmt_time: string;
+    casablanca_time: string;
+    year: number;
+    month: number;
+    day: number;
+    hour: number;
+    minute: number;
+    second: number;
+  };
 }
 
 export interface HarmonicCandidate {
@@ -102,6 +113,11 @@ export interface MatchCandidate {
   end_index: number;
   start_timestamp_utc: string;
   end_timestamp_utc: string;
+  video_file_start_utc?: string;
+  video_file_start_gmt?: string;
+  video_file_start_casablanca?: string;
+  roi_start_gmt?: string;
+  roi_start_casablanca?: string;
   gmt_time?: string;
   gmt_time_only?: string;
   gmt_date_only?: string;

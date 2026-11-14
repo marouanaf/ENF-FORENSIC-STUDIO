@@ -103,6 +103,7 @@ export async function matchDatabase(params: {
   years?: number[];
   top_k?: number;
   min_separation_sec?: number;
+  roi_start_sec?: number;
 }): Promise<MatchResponse> {
   const res = await fetch(`${API_BASE}/api/match-database`, {
     method: "POST",
@@ -115,6 +116,7 @@ export async function matchDatabase(params: {
       years: params.years,
       top_k: params.top_k ?? 5,
       min_separation_sec: params.min_separation_sec ?? 300,
+      roi_start_sec: params.roi_start_sec ?? 0.0,
     }),
   });
 

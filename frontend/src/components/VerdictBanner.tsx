@@ -1,25 +1,96 @@
 "use client";
 
-import React from "react";
-import { ShieldCheck, ShieldAlert, Award, Calendar, Clock, Globe2, BarChart3, Target } from "lucide-react";
-import { MatchResponse } from "../lib/types";
+import React, { useState } from "react";
+import {
+  ShieldCheck,
+  ShieldAlert,
+  Award,
+  Calendar,
+  Clock,
+  Globe2,
+  Video,
+  Sliders,
+  CheckCircle2,
+  AlertTriangle,
+} from "lucide-react";
+import { MatchCandidate, MatchResponse } from "../lib/types";
 
 interface VerdictBannerProps {
   matchResult: MatchResponse;
+  activeCandidate?: MatchCandidate;
 }
 
-export const VerdictBanner: React.FC<VerdictBannerProps> = ({ matchResult }) => {
+type TimezoneViewMode = "gmt" | "casablanca" | "cet" | "manual";
+
+export const VerdictBanner: React.FC<VerdictBannerProps> = ({
+  matchResult,
+  activeCandidate,
+}) => {
+  const [tzMode, setTzMode] = useState<TimezoneViewMode>("gmt");
+  const [manualHourShift, setManualHourShift] = useState<number>(0);
+
+  const candidate = activeCandidate || matchResult.best_match;
   const {
     verdict,
     verdict_badge,
     verdict_color,
     confidence_pct,
-    best_match,
-    best_match_timezone,
     z_score,
     search_window_seconds,
     database_total_seconds,
   } = matchResult;
+
+  // Format timestamp based on selected Timezone and manual hour shift
+  const formatShiftedTime = (utcIso: string): { displayTime: string; label: string } => {
+    try {
+      const dt = new Date(utcIso);
+      if (isNaN(dt.getTime())) return { displayTime: utcIso, label: "UTC" };
+
+      if (tzMode === "gmt") {
+        const shifted = new Date(dt.getTime() + manualHourShift * 3600 * 1000);
+        const y = shifted.getUTCFullYear();
+        const m = String(shifted.getUTCMonth() + 1).padStart(2, "0");
+        const d = String(shifted.getUTCDate()).padStart(2, "0");
+        const hh = String(shifted.getUTCHours()).padStart(2, "0");
+        const mm = String(shifted.getUTCMinutes()).padStart(2, "0");
+        const ss = String(shifted.getUTCSeconds()).padStart(2, "0");
+        const shiftTag = manualHourShift !== 0 ? ` (${manualHourShift > 0 ? `+${manualHourShift}` : manualHourShift}h shift)` : "";
+        return {
+          displayTime: `${y}-${m}-${d} ${hh}:${mm}:${ss} GMT${shiftTag}`,
+          label: `GMT / UTC (UTC${manualHourShift >= 0 ? `+${manualHourShift}` : manualHourShift})`,
+        };
+      } else if (tzMode === "casablanca") {
+        return {
+          displayTime: candidate.casablanca_time || utcIso,
+          label: "Africa/Casablanca Local Time",
+        };
+      } else if (tzMode === "cet") {
+        // CET / CEST (+1 or +2)
+        const shifted = new Date(dt.getTime() + (2 + manualHourShift) * 3600 * 1000);
+        const y = shifted.getUTCFullYear();
+        const m = String(shifted.getUTCMonth() + 1).padStart(2, "0");
+        const d = String(shifted.getUTCDate()).padStart(2, "0");
+        const hh = String(shifted.getUTCHours()).padStart(2, "0");
+        const mm = String(shifted.getUTCMinutes()).padStart(2, "0");
+        const ss = String(shifted.getUTCSeconds()).padStart(2, "0");
+        return {
+          displayTime: `${y}-${m}-${d} ${hh}:${mm}:${ss} CET (Europe/Paris/Berlin)`,
+          label: "Central European Time (CET/CEST)",
+        };
+      } else {
+        const shifted = new Date(dt.getTime() + manualHourShift * 3600 * 1000);
+        return {
+          displayTime: shifted.toUTCString().replace("GMT", `Camera Clock (${manualHourShift >= 0 ? `+${manualHourShift}` : manualHourShift}h)`),
+          label: "Manual Camera Clock Offset",
+        };
+      }
+    } catch {
+      return { displayTime: utcIso, label: "UTC" };
+    }
+  };
+
+  const videoStartTime = formatShiftedTime(candidate.video_file_start_utc || candidate.start_timestamp_utc);
+  const roiStartTime = formatShiftedTime(candidate.start_timestamp_utc);
 
   const colorStyles = {
     emerald: {
@@ -63,15 +134,13 @@ export const VerdictBanner: React.FC<VerdictBannerProps> = ({ matchResult }) => 
     accentText: "text-emerald-400",
   };
 
-  const gmtTimestamp = best_match.gmt_time || best_match_timezone?.gmt_formatted || `${best_match.start_timestamp_utc.replace("T", " ").replace("Z", "")} GMT`;
-
   return (
     <div
-      className={`border ${colorStyles.border} ${colorStyles.bg} ${colorStyles.glow} rounded-2xl p-6 backdrop-blur-xl shadow-2xl relative overflow-hidden`}
+      className={`border ${colorStyles.border} ${colorStyles.bg} ${colorStyles.glow} rounded-2xl p-6 backdrop-blur-xl shadow-2xl relative overflow-hidden space-y-4`}
     >
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
         {/* Main Verdict & Timestamp */}
-        <div className="space-y-3">
+        <div className="space-y-3 flex-1">
           <div className="flex items-center gap-3.5">
             {colorStyles.icon}
             <div>
@@ -85,58 +154,109 @@ export const VerdictBanner: React.FC<VerdictBannerProps> = ({ matchResult }) => 
                   Forensic Confidence: <strong className={colorStyles.accentText}>{confidence_pct}%</strong>
                 </span>
               </div>
-              <h2 className="text-2xl font-black tracking-tight text-white mt-1">
-                {verdict}
+              <h2 className="text-2xl font-black tracking-tight text-white mt-1 flex items-center gap-2">
+                <span>{verdict}</span>
+                {candidate.rank > 1 && (
+                  <span className="text-xs font-mono font-normal text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                    Inspecting Candidate #{candidate.rank}
+                  </span>
+                )}
               </h2>
             </div>
           </div>
 
-          {/* Primary Matched Timing Banner in GMT */}
-          <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center gap-6 text-xs font-mono">
-            {/* Primary GMT Date & Time */}
-            <div>
-              <span className="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">
-                AUTHENTICATED DATE & TIME (GMT)
-              </span>
-              <span className="text-base font-extrabold text-emerald-400 flex items-center gap-1.5 mt-1">
-                <Clock className="w-4 h-4 text-emerald-400" />
-                {gmtTimestamp}
-              </span>
+          {/* Timing Display Card */}
+          <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-4 space-y-3 font-mono text-xs">
+            {/* Top row: Video File Start (t = 0.0s) */}
+            <div className="flex flex-wrap items-center justify-between gap-4 pb-2 border-b border-slate-800/80">
+              <div>
+                <span className="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold flex items-center gap-1 text-emerald-400">
+                  <Video className="w-3.5 h-3.5" />
+                  <span>VIDEO RECORDING START TIME (t = 0.0s)</span>
+                </span>
+                <span className="text-base font-extrabold text-white flex items-center gap-1.5 mt-0.5">
+                  <Clock className="w-4 h-4 text-emerald-400" />
+                  <span>{videoStartTime.displayTime}</span>
+                </span>
+              </div>
+
+              {/* Analyzed ROI Sub-interval */}
+              <div className="text-right">
+                <span className="text-slate-500 block text-[10px] uppercase tracking-wider">
+                  ANALYZED ROI INTERVAL
+                </span>
+                <span className="text-slate-300 block text-xs mt-0.5">
+                  {roiStartTime.displayTime} ({search_window_seconds}s span)
+                </span>
+              </div>
             </div>
 
-            {/* Casablanca Local Offset */}
-            <div className="border-l border-slate-800 pl-6">
-              <span className="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">
-                CASABLANCA (LOCAL TIME)
-              </span>
-              <span className="text-sm font-semibold text-slate-200 flex items-center gap-1.5 mt-1">
-                <Globe2 className="w-4 h-4 text-cyan-400" />
-                {best_match.casablanca_time || best_match_timezone?.casablanca_formatted}
-              </span>
-            </div>
+            {/* Bottom row: Timezone & Hour Shift Controls */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] text-slate-400 mr-1 flex items-center gap-1">
+                  <Globe2 className="w-3 h-3 text-cyan-400" />
+                  <span>Display Clock:</span>
+                </span>
+                {[
+                  { id: "gmt", label: "GMT (UTC+0)" },
+                  { id: "casablanca", label: "Casablanca" },
+                  { id: "cet", label: "CET (+1h/+2h)" },
+                ].map((tz) => (
+                  <button
+                    key={tz.id}
+                    type="button"
+                    onClick={() => {
+                      setTzMode(tz.id as TimezoneViewMode);
+                      setManualHourShift(0);
+                    }}
+                    className={`px-2 py-0.5 rounded text-[11px] border cursor-pointer transition-colors ${
+                      tzMode === tz.id && manualHourShift === 0
+                        ? "bg-cyan-500/20 text-cyan-300 border-cyan-500 font-bold"
+                        : "bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200"
+                    }`}
+                  >
+                    {tz.label}
+                  </button>
+                ))}
+              </div>
 
-            {/* Window Span */}
-            <div className="border-l border-slate-800 pl-6 hidden md:block">
-              <span className="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">
-                WINDOW SPAN
-              </span>
-              <span className="text-slate-300 mt-1 block">
-                {search_window_seconds}s Window ({best_match.start_index}s → {best_match.end_index}s)
-              </span>
+              {/* Manual Camera Clock Shift Buttons */}
+              <div className="flex items-center gap-1 text-[11px]">
+                <span className="text-slate-500 text-[10px]">Hour Shift:</span>
+                {[-2, -1, 0, 1, 2].map((shift) => (
+                  <button
+                    key={shift}
+                    type="button"
+                    onClick={() => {
+                      setTzMode("gmt");
+                      setManualHourShift(shift);
+                    }}
+                    className={`w-6 h-5 rounded text-[10px] font-bold border cursor-pointer transition-colors text-center ${
+                      manualHourShift === shift
+                        ? "bg-emerald-500/30 text-emerald-300 border-emerald-500"
+                        : "bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200"
+                    }`}
+                    title={`Shift displayed time by ${shift >= 0 ? `+${shift}` : shift} hour(s)`}
+                  >
+                    {shift > 0 ? `+${shift}` : shift}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
 
         {/* Statistical Telemetry Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center min-w-[280px]">
           {/* Pearson Correlation & Micro-Wiggles */}
           <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3">
             <span className="text-[10px] text-slate-400 block font-mono">PEARSON COEFF (r)</span>
             <span className="text-xl font-black font-mono text-emerald-400 mt-0.5 block">
-              {best_match.pearson_r.toFixed(4)}
+              {candidate.pearson_r.toFixed(4)}
             </span>
             <span className="text-[9px] text-cyan-400 font-mono">
-              {best_match.diff_r !== undefined ? `Δf wiggles: r = ${best_match.diff_r.toFixed(3)}` : "Max: 1.0"}
+              {candidate.diff_r !== undefined ? `Δf wiggles: r = ${candidate.diff_r.toFixed(3)}` : "Max: 1.0"}
             </span>
           </div>
 
@@ -144,9 +264,9 @@ export const VerdictBanner: React.FC<VerdictBannerProps> = ({ matchResult }) => 
           <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3">
             <span className="text-[10px] text-slate-400 block font-mono">RMSE ERROR</span>
             <span className="text-xl font-black font-mono text-cyan-400 mt-0.5 block">
-              {best_match.rmse_mhz.toFixed(2)} <span className="text-xs font-normal">mHz</span>
+              {candidate.rmse_mhz.toFixed(2)} <span className="text-xs font-normal">mHz</span>
             </span>
-            <span className="text-[9px] text-slate-500 font-mono">MSE: {best_match.mse.toExponential(2)}</span>
+            <span className="text-[9px] text-slate-500 font-mono">MSE: {candidate.mse.toExponential(2)}</span>
           </div>
 
           {/* Z-Score vs Noise Floor */}

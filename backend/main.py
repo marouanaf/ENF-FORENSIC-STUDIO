@@ -152,6 +152,7 @@ class MatchDatabaseRequest(BaseModel):
     years: Optional[List[int]] = None
     top_k: int = 5
     min_separation_sec: int = 300
+    roi_start_sec: float = 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -202,6 +203,32 @@ async def upload_media(file: UploadFile = File(...)):
 
         format_info = probe_json.get("format", {})
         duration = float(format_info.get("duration", 0.0))
+
+        detected_metadata_time = None
+        creation_str = format_info.get("tags", {}).get("creation_time")
+        if not creation_str:
+            for st in probe_json.get("streams", []):
+                creation_str = st.get("tags", {}).get("creation_time")
+                if creation_str:
+                    break
+
+        if creation_str:
+            try:
+                dt_meta = pd.to_datetime(creation_str)
+                tz_meta = convert_to_dual_timezones(dt_meta)
+                detected_metadata_time = {
+                    "utc_iso": tz_meta["utc_iso"],
+                    "gmt_time": tz_meta["gmt_formatted"],
+                    "casablanca_time": tz_meta["casablanca_formatted"],
+                    "year": int(dt_meta.year),
+                    "month": int(dt_meta.month),
+                    "day": int(dt_meta.day),
+                    "hour": int(dt_meta.hour),
+                    "minute": int(dt_meta.minute),
+                    "second": int(dt_meta.second)
+                }
+            except Exception as ex:
+                print(f"[Metadata Timestamp] Parse error: {ex}")
 
         for st in probe_json.get("streams", []):
             if st.get("codec_type") == "video" and not has_video:
@@ -257,7 +284,8 @@ async def upload_media(file: UploadFile = File(...)):
         "sample_rate": sample_rate,
         "waveform_peaks": waveform_peaks,
         "size_bytes": len(content),
-        "cached_trace": None
+        "cached_trace": None,
+        "detected_metadata_time": detected_metadata_time
     }
 
     return {
@@ -269,7 +297,8 @@ async def upload_media(file: UploadFile = File(...)):
         "resolution": f"{width}x{height}" if has_video else None,
         "sample_rate": sample_rate,
         "waveform_peaks": waveform_peaks,
-        "size_bytes": len(content)
+        "size_bytes": len(content),
+        "detected_metadata_time": detected_metadata_time
     }
 
 
@@ -432,7 +461,8 @@ def match_database(req: MatchDatabaseRequest):
                 query_enf=query_enf,
                 parquet_path_or_df=db_info["path"],
                 top_k=req.top_k,
-                min_separation_sec=req.min_separation_sec
+                min_separation_sec=req.min_separation_sec,
+                roi_start_sec=req.roi_start_sec
             )
             match_result["database_id"] = db_id
             match_result["database_filename"] = db_info["filename"]
@@ -451,7 +481,8 @@ def match_database(req: MatchDatabaseRequest):
                 query_enf=query_enf,
                 parquet_path_or_df=d_info["path"],
                 top_k=req.top_k,
-                min_separation_sec=req.min_separation_sec
+                min_separation_sec=req.min_separation_sec,
+                roi_start_sec=req.roi_start_sec
             )
             best_c = m_res["best_match"]
 

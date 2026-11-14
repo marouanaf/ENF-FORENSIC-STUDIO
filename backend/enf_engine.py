@@ -721,7 +721,8 @@ class ENFEngine:
         query_enf: Union[List[float], np.ndarray],
         parquet_path_or_df: Union[str, pd.DataFrame],
         top_k: int = 5,
-        min_separation_sec: int = 300
+        min_separation_sec: int = 300,
+        roi_start_sec: float = 0.0
     ) -> Dict[str, Any]:
         """
         Hardened Multi-Scale Vectorized FFT Cross-Correlation & Minimum MSE Matching.
@@ -882,6 +883,18 @@ class ENFEngine:
             t_end_utc = timestamps_utc[idx + L - 1]
             tz_info = convert_to_dual_timezones(t_start_utc)
 
+            # Extrapolate video file start time (t = 0.0s) by subtracting roi_start_sec
+            if roi_start_sec > 0:
+                dt_vid = pd.to_datetime(t_start_utc) - pd.Timedelta(seconds=roi_start_sec)
+                tz_video = convert_to_dual_timezones(dt_vid)
+                video_file_start_utc = tz_video["utc_iso"]
+                video_file_start_gmt = tz_video["gmt_formatted"]
+                video_file_start_casablanca = tz_video["casablanca_formatted"]
+            else:
+                video_file_start_utc = t_start_utc
+                video_file_start_gmt = tz_info["gmt_formatted"]
+                video_file_start_casablanca = tz_info["casablanca_formatted"]
+
             c_r = float(r_raw_curve[idx])
             c_rdiff = float(r_diff_curve[idx])
             c_score = float(forensic_score_curve[idx])
@@ -894,6 +907,11 @@ class ENFEngine:
                 "end_index": int(idx + L - 1),
                 "start_timestamp_utc": t_start_utc,
                 "end_timestamp_utc": t_end_utc,
+                "video_file_start_utc": video_file_start_utc,
+                "video_file_start_gmt": video_file_start_gmt,
+                "video_file_start_casablanca": video_file_start_casablanca,
+                "roi_start_gmt": tz_info["gmt_formatted"],
+                "roi_start_casablanca": tz_info["casablanca_formatted"],
                 "gmt_time": tz_info["gmt_formatted"],
                 "gmt_time_only": tz_info["gmt_time_only"],
                 "gmt_date_only": tz_info["gmt_date_only"],
