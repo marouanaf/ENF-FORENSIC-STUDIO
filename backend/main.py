@@ -332,16 +332,38 @@ def extract_enf(req: ExtractEnfRequest):
                 window_seconds=req.window_seconds
             )
         else:
-            # Default acoustic
-            result = engine.extract_acoustic_enf(
-                media_path=media_path,
-                start_sec=req.start_sec,
-                end_sec=req.end_sec,
-                nominal_grid_hz=req.nominal_grid_hz,
-                harmonic_multiplier=harmonic_mult,
-                window_seconds=req.window_seconds,
-                band_margin=req.band_margin
-            )
+            # Default acoustic with multi-harmonic cross-verification and Viterbi tracking
+            try:
+                m_ver = engine.verify_multi_harmonics(
+                    media_path=media_path,
+                    start_sec=req.start_sec,
+                    end_sec=req.end_sec,
+                    nominal_grid_hz=req.nominal_grid_hz,
+                    window_seconds=req.window_seconds
+                )
+                result = engine.extract_acoustic_enf(
+                    media_path=media_path,
+                    start_sec=req.start_sec,
+                    end_sec=req.end_sec,
+                    nominal_grid_hz=req.nominal_grid_hz,
+                    harmonic_multiplier=harmonic_mult,
+                    window_seconds=req.window_seconds,
+                    band_margin=req.band_margin
+                )
+                if m_ver.get("verified"):
+                    result["trace"]["normalized_enf"] = m_ver["fused_trace"]
+                result["multi_harmonic_verification"] = m_ver
+            except Exception as e:
+                print(f"[Multi-Harmonic] fallback: {e}")
+                result = engine.extract_acoustic_enf(
+                    media_path=media_path,
+                    start_sec=req.start_sec,
+                    end_sec=req.end_sec,
+                    nominal_grid_hz=req.nominal_grid_hz,
+                    harmonic_multiplier=harmonic_mult,
+                    window_seconds=req.window_seconds,
+                    band_margin=req.band_margin
+                )
 
         # Cache trace for instant matching
         media_info["cached_trace"] = result["trace"]
@@ -357,7 +379,8 @@ def extract_enf(req: ExtractEnfRequest):
             "start_sec": req.start_sec,
             "duration_sec": result.get("duration_sec"),
             "trace": result["trace"],
-            "spectrogram": result["spectrogram"]
+            "spectrogram": result["spectrogram"],
+            "multi_harmonic_verification": result.get("multi_harmonic_verification")
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"ENF extraction failed: {str(e)}")

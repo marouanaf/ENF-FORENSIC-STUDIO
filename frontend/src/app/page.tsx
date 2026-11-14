@@ -267,6 +267,12 @@ export default function ForensicWorkstationPage() {
                 </h2>
               </div>
               <div className="flex items-center gap-3">
+                {extractionResult.multi_harmonic_verification?.verified && (
+                  <span className="text-xs font-mono px-2.5 py-1 rounded bg-emerald-950/80 border border-emerald-500/60 text-emerald-300 flex items-center gap-1.5 shadow-sm shadow-emerald-950">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Multi-Harmonic Verified: r(f₂/2, f₄/4) = {extractionResult.multi_harmonic_verification.cross_harmonic_r.toFixed(3)} (Δ = {extractionResult.multi_harmonic_verification.mean_discrepancy_mhz.toFixed(1)} mHz)</span>
+                  </span>
+                )}
                 {extractionResult.selected_modality && (
                   <span className="text-xs font-mono px-2.5 py-1 rounded bg-slate-900 border border-slate-800 text-cyan-300">
                     Modality: <strong className="text-emerald-400 uppercase">{extractionResult.selected_modality}</strong>{" "}

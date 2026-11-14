@@ -59,6 +59,7 @@ export interface ExtractEnfResponse {
   f_row_sampling_rate?: number;
   trace: EnfTrace;
   spectrogram: SpectrogramData;
+  multi_harmonic_verification?: MultiHarmonicVerification;
 }
 
 export interface GridDatabaseInfo {
