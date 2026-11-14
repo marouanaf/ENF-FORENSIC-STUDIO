@@ -186,6 +186,8 @@ class MatchDatabaseRequest(BaseModel):
     top_k: int = 5
     min_separation_sec: int = 300
     roi_start_sec: float = 0.0
+    start_time_filter: Optional[str] = None
+    end_time_filter: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -507,7 +509,9 @@ def match_database(req: MatchDatabaseRequest):
                 parquet_path_or_df=db_info["path"],
                 top_k=req.top_k,
                 min_separation_sec=req.min_separation_sec,
-                roi_start_sec=req.roi_start_sec
+                roi_start_sec=req.roi_start_sec,
+                start_time_filter=req.start_time_filter,
+                end_time_filter=req.end_time_filter
             )
             match_result["database_id"] = db_id
             match_result["database_filename"] = db_info["filename"]
@@ -527,7 +531,9 @@ def match_database(req: MatchDatabaseRequest):
                 parquet_path_or_df=d_info["path"],
                 top_k=req.top_k,
                 min_separation_sec=req.min_separation_sec,
-                roi_start_sec=req.roi_start_sec
+                roi_start_sec=req.roi_start_sec,
+                start_time_filter=req.start_time_filter,
+                end_time_filter=req.end_time_filter
             )
             best_c = m_res["best_match"]
             score = float(best_c.get("forensic_score", best_c["pearson_r"]))

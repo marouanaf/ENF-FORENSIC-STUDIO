@@ -13,6 +13,7 @@ import {
   CheckSquare,
   Square,
   Sparkles,
+  Clock,
 } from "lucide-react";
 import { EnfAnalysisMode, GridDatabaseInfo, MediaInfo } from "../lib/types";
 
@@ -32,7 +33,7 @@ interface ConfigPanelProps {
   setSelectedDatabaseIds: (ids: string[]) => void;
   onRefreshDatabases: () => void;
   onOpenUploadModal: () => void;
-  onRunFullForensicAnalysis: (targetDbIds: string[]) => void;
+  onRunFullForensicAnalysis: (targetDbIds: string[], startTimeFilter?: string, endTimeFilter?: string) => void;
   isAnalyzing: boolean;
   onQuickDownloadYear: (year: number) => void;
   isDownloadingYear: boolean;
@@ -59,7 +60,27 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
   onQuickDownloadYear,
   isDownloadingYear,
 }) => {
+  const [constrainToCreationHour, setConstrainToCreationHour] = useState<boolean>(true);
+  const [hourMargin, setHourMargin] = useState<number>(3);
   const targetFreq = nominalGrid * harmonicMultiplier;
+  const handleRunAnalysis = () => {
+    let startFilter: string | undefined = undefined;
+    let endFilter: string | undefined = undefined;
+
+    if (constrainToCreationHour && mediaInfo?.detected_metadata_time) {
+      const meta = mediaInfo.detected_metadata_time;
+      const y = meta.year;
+      const m = String(meta.month).padStart(2, "0");
+      const d = String(meta.day).padStart(2, "0");
+      const sH = Math.max(0, meta.hour - hourMargin);
+      const eH = Math.min(23, meta.hour + hourMargin);
+      startFilter = `${y}-${m}-${d}T${String(sH).padStart(2, "0")}:00:00Z`;
+      endFilter = `${y}-${m}-${d}T${String(eH).padStart(2, "0")}:59:59Z`;
+    }
+
+    onRunFullForensicAnalysis(selectedDatabaseIds, startFilter, endFilter);
+  };
+
   const availableYears = [2017, 2018, 2019, 2020, 2021, 2022, 2024, 2026];
 
   // Helper to check if a year is selected
@@ -282,10 +303,39 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
         </div>
       </div>
 
-      {/* 4. Primary Unified Action: 1-Click Multi-Year Sweep */}
+      {/* Target Time Window Filter to lock exact hour */}
+      {mediaInfo?.detected_metadata_time && (
+        <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2 text-xs font-mono">
+          <div className="flex items-center justify-between">
+            <span className="text-slate-300 font-semibold flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Target Recording Hour Focus</span>
+            </span>
+            <label className="flex items-center gap-1 text-[11px] text-cyan-400 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={constrainToCreationHour}
+                onChange={(e) => setConstrainToCreationHour(e.target.checked)}
+                className="rounded border-slate-700 bg-slate-900 text-cyan-500"
+              />
+              <span>Focus on Video Creation Window</span>
+            </label>
+          </div>
+          {constrainToCreationHour && (
+            <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800/60">
+              <span>Filter Window:</span>
+              <span className="text-emerald-400 font-bold">
+                {mediaInfo.detected_metadata_time.year}-{String(mediaInfo.detected_metadata_time.month).padStart(2, "0")}-{String(mediaInfo.detected_metadata_time.day).padStart(2, "0")} {String(Math.max(0, mediaInfo.detected_metadata_time.hour - hourMargin)).padStart(2, "0")}:00 – {String(Math.min(23, mediaInfo.detected_metadata_time.hour + hourMargin)).padStart(2, "0")}:59 GMT
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+            {/* 4. Primary Unified Action: 1-Click Multi-Year Sweep */}
       <div className="pt-2 border-t border-slate-800">
         <button
-          onClick={() => onRunFullForensicAnalysis(selectedDatabaseIds)}
+          onClick={handleRunAnalysis}
           disabled={!mediaInfo || isAnalyzing || selectedDatabaseIds.length === 0}
           className="w-full py-3 px-4 rounded-xl text-xs font-extrabold bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white shadow-xl shadow-emerald-950/60 flex items-center justify-center gap-2 transition-all disabled:opacity-40 cursor-pointer"
         >

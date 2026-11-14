@@ -135,6 +135,8 @@ export async function matchDatabase(params: {
   top_k?: number;
   min_separation_sec?: number;
   roi_start_sec?: number;
+  start_time_filter?: string;
+  end_time_filter?: string;
 }): Promise<MatchResponse> {
   const res = await apiFetch("/api/match-database", {
     method: "POST",
@@ -148,6 +150,8 @@ export async function matchDatabase(params: {
       top_k: params.top_k ?? 5,
       min_separation_sec: params.min_separation_sec ?? 300,
       roi_start_sec: params.roi_start_sec ?? 0.0,
+      start_time_filter: params.start_time_filter,
+      end_time_filter: params.end_time_filter,
     }),
   });
 

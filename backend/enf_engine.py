@@ -1106,7 +1106,9 @@ class ENFEngine:
         parquet_path_or_df: Union[str, pd.DataFrame],
         top_k: int = 5,
         min_separation_sec: int = 300,
-        roi_start_sec: float = 0.0
+        roi_start_sec: float = 0.0,
+        start_time_filter: Optional[str] = None,
+        end_time_filter: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Hardened Multi-Scale Vectorized FFT Cross-Correlation & Minimum MSE Matching.
@@ -1127,7 +1129,15 @@ class ENFEngine:
         if isinstance(parquet_path_or_df, str):
             df_grid = pd.read_parquet(parquet_path_or_df)
         else:
-            df_grid = parquet_path_or_df
+            df_grid = parquet_path_or_df.copy()
+
+        if start_time_filter:
+            df_grid = df_grid[df_grid["timestamp_utc"] >= start_time_filter]
+        if end_time_filter:
+            df_grid = df_grid[df_grid["timestamp_utc"] <= end_time_filter]
+
+        if len(df_grid) == 0:
+            raise ValueError(f"No reference grid data found in the specified time window [{start_time_filter} to {end_time_filter}].")
 
         y = df_grid["freq"].values.astype(np.float64)
         timestamps_utc = df_grid["timestamp_utc"].tolist()

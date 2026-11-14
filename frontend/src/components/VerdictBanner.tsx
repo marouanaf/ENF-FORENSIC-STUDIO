@@ -18,6 +18,7 @@ import { MatchCandidate, MatchResponse } from "../lib/types";
 interface VerdictBannerProps {
   matchResult: MatchResponse;
   activeCandidate?: MatchCandidate;
+  mediaInfo?: import("../lib/types").MediaInfo | null;
 }
 
 type TimezoneViewMode = "gmt" | "casablanca" | "cet" | "manual";
@@ -25,6 +26,7 @@ type TimezoneViewMode = "gmt" | "casablanca" | "cet" | "manual";
 export const VerdictBanner: React.FC<VerdictBannerProps> = ({
   matchResult,
   activeCandidate,
+  mediaInfo,
 }) => {
   const [tzMode, setTzMode] = useState<TimezoneViewMode>("gmt");
   const [manualHourShift, setManualHourShift] = useState<number>(0);
@@ -46,44 +48,35 @@ export const VerdictBanner: React.FC<VerdictBannerProps> = ({
       const dt = new Date(utcIso);
       if (isNaN(dt.getTime())) return { displayTime: utcIso, label: "UTC" };
 
-      if (tzMode === "gmt") {
-        const shifted = new Date(dt.getTime() + manualHourShift * 3600 * 1000);
-        const y = shifted.getUTCFullYear();
-        const m = String(shifted.getUTCMonth() + 1).padStart(2, "0");
-        const d = String(shifted.getUTCDate()).padStart(2, "0");
-        const hh = String(shifted.getUTCHours()).padStart(2, "0");
-        const mm = String(shifted.getUTCMinutes()).padStart(2, "0");
-        const ss = String(shifted.getUTCSeconds()).padStart(2, "0");
-        const shiftTag = manualHourShift !== 0 ? ` (${manualHourShift > 0 ? `+${manualHourShift}` : manualHourShift}h shift)` : "";
-        return {
-          displayTime: `${y}-${m}-${d} ${hh}:${mm}:${ss} GMT${shiftTag}`,
-          label: `GMT / UTC (UTC${manualHourShift >= 0 ? `+${manualHourShift}` : manualHourShift})`,
-        };
-      } else if (tzMode === "casablanca") {
-        return {
-          displayTime: candidate.casablanca_time || utcIso,
-          label: "Africa/Casablanca Local Time",
-        };
+      let baseOffsetHours = 0;
+      let tzTag = "GMT";
+      let tzLabel = "GMT / UTC";
+
+      if (tzMode === "casablanca") {
+        baseOffsetHours = 1;
+        tzTag = "Africa/Casablanca (GMT+1)";
+        tzLabel = "Africa/Casablanca Local Time";
       } else if (tzMode === "cet") {
-        // CET / CEST (+1 or +2)
-        const shifted = new Date(dt.getTime() + (2 + manualHourShift) * 3600 * 1000);
-        const y = shifted.getUTCFullYear();
-        const m = String(shifted.getUTCMonth() + 1).padStart(2, "0");
-        const d = String(shifted.getUTCDate()).padStart(2, "0");
-        const hh = String(shifted.getUTCHours()).padStart(2, "0");
-        const mm = String(shifted.getUTCMinutes()).padStart(2, "0");
-        const ss = String(shifted.getUTCSeconds()).padStart(2, "0");
-        return {
-          displayTime: `${y}-${m}-${d} ${hh}:${mm}:${ss} CET (Europe/Paris/Berlin)`,
-          label: "Central European Time (CET/CEST)",
-        };
-      } else {
-        const shifted = new Date(dt.getTime() + manualHourShift * 3600 * 1000);
-        return {
-          displayTime: shifted.toUTCString().replace("GMT", `Camera Clock (${manualHourShift >= 0 ? `+${manualHourShift}` : manualHourShift}h)`),
-          label: "Manual Camera Clock Offset",
-        };
+        baseOffsetHours = 2;
+        tzTag = "CET";
+        tzLabel = "Central European Time (CET)";
       }
+
+      const totalOffsetMs = (baseOffsetHours + manualHourShift) * 3600 * 1000;
+      const shifted = new Date(dt.getTime() + totalOffsetMs);
+
+      const y = shifted.getUTCFullYear();
+      const m = String(shifted.getUTCMonth() + 1).padStart(2, "0");
+      const d = String(shifted.getUTCDate()).padStart(2, "0");
+      const hh = String(shifted.getUTCHours()).padStart(2, "0");
+      const mm = String(shifted.getUTCMinutes()).padStart(2, "0");
+      const ss = String(shifted.getUTCSeconds()).padStart(2, "0");
+
+      const shiftTag = manualHourShift !== 0 ? ` (${manualHourShift > 0 ? `+${manualHourShift}` : manualHourShift}h shift)` : "";
+      return {
+        displayTime: `${y}-${m}-${d} ${hh}:${mm}:${ss} ${tzTag}${shiftTag}`,
+        label: tzLabel,
+      };
     } catch {
       return { displayTime: utcIso, label: "UTC" };
     }
@@ -164,6 +157,20 @@ export const VerdictBanner: React.FC<VerdictBannerProps> = ({
               </h2>
             </div>
           </div>
+
+          {/* Camera Clock / Container Metadata Header Comparison */}
+          {mediaInfo?.detected_metadata_time && (
+            <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 text-xs font-mono flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400 text-[10px] uppercase font-semibold">Video File Header Clock:</span>
+                <span className="text-white font-bold">{mediaInfo.detected_metadata_time.gmt_time}</span>
+                <span className="text-cyan-400 text-[11px]">({mediaInfo.detected_metadata_time.casablanca_time})</span>
+              </div>
+              <span className="text-emerald-400 text-[11px]">
+                Date Verified: {mediaInfo.detected_metadata_time.year}-{String(mediaInfo.detected_metadata_time.month).padStart(2, "0")}-{String(mediaInfo.detected_metadata_time.day).padStart(2, "0")}
+              </span>
+            </div>
+          )}
 
           {/* Timing Display Card */}
           <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-4 space-y-3 font-mono text-xs">

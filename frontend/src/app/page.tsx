@@ -126,7 +126,11 @@ export default function ForensicWorkstationPage() {
   };
 
   // Multi-Year Forensic Analysis: Extracts ENF & Scans across all selected years simultaneously
-  const handleRunFullForensicAnalysis = async (targetDbIds: string[]) => {
+  const handleRunFullForensicAnalysis = async (
+    targetDbIds: string[],
+    startTimeFilter?: string,
+    endTimeFilter?: string
+  ) => {
     if (!mediaInfo) {
       showNotification("error", "Please upload or select an audio/video file first.");
       return;
@@ -165,6 +169,8 @@ export default function ForensicWorkstationPage() {
         top_k: 5,
         min_separation_sec: 300,
         roi_start_sec: roiStart,
+        start_time_filter: startTimeFilter,
+        end_time_filter: endTimeFilter,
       });
 
       setMatchResult(mRes);
@@ -329,7 +335,7 @@ export default function ForensicWorkstationPage() {
             {matchResult && (
               <div className="space-y-6 animate-in fade-in duration-500">
                 {/* 1. Verdict Banner */}
-                <VerdictBanner matchResult={matchResult} activeCandidate={matchResult.top_candidates[selectedRank - 1]} />
+                <VerdictBanner matchResult={matchResult} activeCandidate={matchResult.top_candidates[selectedRank - 1]} mediaInfo={mediaInfo} />
 
                 {/* 2. Multi-Year Comparative Leaderboard (shows how the winning year stands out!) */}
                 {matchResult.year_comparison && matchResult.year_comparison.length > 1 && (
