@@ -52,7 +52,7 @@ app.add_middleware(
 )
 
 # Storage directories
-BASE_TEMP_DIR = tempfile.mkdtemp(prefix="enf_workstation_")
+BASE_TEMP_DIR = os.path.join(tempfile.gettempdir(), "enf_workstation_persistent")
 MEDIA_DIR = os.path.join(BASE_TEMP_DIR, "media")
 DATABASE_DIR = os.path.join(BASE_TEMP_DIR, "databases")
 SIMULATION_DIR = os.path.join(BASE_TEMP_DIR, "simulations")
@@ -78,8 +78,11 @@ def init_default_databases():
         # 1. Default 2017 Continental Europe / Morocco ONEE 50 Hz Dataset (2017-11-09)
         db_id_2017 = "morocco_onee_2017_11_09"
         path_2017 = os.path.join(DATABASE_DIR, f"{db_id_2017}.parquet")
-        df_2017 = generate_realistic_grid_day(date_str="2017-11-09", nominal_hz=50.0, seed=20171109)
-        save_to_zstd_parquet(df_2017, path_2017)
+        if os.path.exists(path_2017):
+            df_2017 = pd.read_parquet(path_2017)
+        else:
+            df_2017 = generate_realistic_grid_day(date_str="2017-11-09", nominal_hz=50.0, seed=20171109)
+            save_to_zstd_parquet(df_2017, path_2017)
 
         database_registry[db_id_2017] = {
             "database_id": db_id_2017,
@@ -95,8 +98,11 @@ def init_default_databases():
         # 2. 2018 Continental Europe & Morocco ONEE Grid (September 2018 Month - 2.59M seconds)
         db_id_2018 = "morocco_onee_2018_09"
         path_2018 = os.path.join(DATABASE_DIR, f"{db_id_2018}.parquet")
-        df_2018 = generate_realistic_grid_month(year=2018, month=9, nominal_hz=50.0, seed=201809)
-        save_to_zstd_parquet(df_2018, path_2018)
+        if os.path.exists(path_2018):
+            df_2018 = pd.read_parquet(path_2018)
+        else:
+            df_2018 = generate_realistic_grid_month(year=2018, month=9, nominal_hz=50.0, seed=201809)
+            save_to_zstd_parquet(df_2018, path_2018)
 
         database_registry[db_id_2018] = {
             "database_id": db_id_2018,
@@ -112,8 +118,11 @@ def init_default_databases():
         # 3. 2026 Continental Europe & Morocco ONEE Active Grid (November 2026 Month - 2.59M seconds)
         db_id_2026 = "morocco_onee_2026_11"
         path_2026 = os.path.join(DATABASE_DIR, f"{db_id_2026}.parquet")
-        df_2026 = generate_realistic_grid_month(year=2026, month=11, nominal_hz=50.0, seed=202611)
-        save_to_zstd_parquet(df_2026, path_2026)
+        if os.path.exists(path_2026):
+            df_2026 = pd.read_parquet(path_2026)
+        else:
+            df_2026 = generate_realistic_grid_month(year=2026, month=11, nominal_hz=50.0, seed=202611)
+            save_to_zstd_parquet(df_2026, path_2026)
 
         database_registry[db_id_2026] = {
             "database_id": db_id_2026,
@@ -129,8 +138,11 @@ def init_default_databases():
         # 4. General 2024 Reference Dataset (24h)
         db_id_2024 = "entso_e_2024_05_18"
         path_2024 = os.path.join(DATABASE_DIR, f"{db_id_2024}.parquet")
-        df_2024 = generate_realistic_grid_day(date_str="2024-05-18", nominal_hz=50.0, seed=20240518)
-        save_to_zstd_parquet(df_2024, path_2024)
+        if os.path.exists(path_2024):
+            df_2024 = pd.read_parquet(path_2024)
+        else:
+            df_2024 = generate_realistic_grid_day(date_str="2024-05-18", nominal_hz=50.0, seed=20240518)
+            save_to_zstd_parquet(df_2024, path_2024)
 
         database_registry[db_id_2024] = {
             "database_id": db_id_2024,
@@ -359,6 +371,7 @@ async def upload_media(file: UploadFile = File(...)):
 
 
 @app.get("/api/media/{media_id}/stream")
+@app.head("/api/media/{media_id}/stream")
 def stream_media(media_id: str):
     """
     Streams media file for browser audio and video playback.
