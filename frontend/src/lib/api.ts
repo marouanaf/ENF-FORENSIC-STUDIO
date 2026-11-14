@@ -7,7 +7,8 @@ import {
   SimulationResult,
 } from "./types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+// Use same-origin relative URLs in the browser to eliminate CORS & NetworkError across localhost/127.0.0.1/LAN
+const API_BASE = typeof window !== "undefined" ? "" : (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000");
 
 export async function checkHealth(): Promise<{ status: string; databases_available: string[] }> {
   const res = await fetch(`${API_BASE}/api/health`);

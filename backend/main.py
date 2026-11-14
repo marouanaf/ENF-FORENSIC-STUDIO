@@ -11,6 +11,7 @@ Provides REST endpoints for:
 import json
 import os
 import shutil
+import subprocess
 import tempfile
 import uuid
 from typing import Any, Dict, List, Optional, Union
@@ -191,6 +192,7 @@ async def upload_media(file: UploadFile = File(...)):
     width = 0
     height = 0
     sample_rate = 44100
+    detected_metadata_time = None
 
     try:
         cmd_probe = [
