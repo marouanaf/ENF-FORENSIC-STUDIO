@@ -803,18 +803,39 @@ class ENFEngine:
                 "error_mhz": round(err_mhz, 3)
             })
 
-        # Downsample correlation curve for UI (up to 1200 points)
-        step_down = max(1, num_windows // 1200)
+        # 1. Exact Match Zoomed Peak Curve (±120 seconds around best_idx at 1-second resolution)
+        zoom_radius = min(120, num_windows // 2)
+        start_zoom = max(0, best_idx - zoom_radius)
+        end_zoom = min(num_windows - 1, best_idx + zoom_radius)
+        zoomed_indices = np.arange(start_zoom, end_zoom + 1)
+
+        correlation_curve_zoomed = []
+        for idx in zoomed_indices:
+            t_u = timestamps_utc[int(idx)]
+            tz_u = convert_to_dual_timezones(t_u)
+            correlation_curve_zoomed.append({
+                "relative_sec": int(idx - best_idx),
+                "index": int(idx),
+                "timestamp_utc": t_u,
+                "casablanca_time": tz_u["casablanca_time_only"],
+                "pearson_r": round(float(r_curve[idx]), 5),
+                "mse": round(float(mse_curve[idx]), 6),
+                "is_best": bool(idx == best_idx)
+            })
+
+        # 2. Global sampled curve across the full database
+        step_down = max(1, num_windows // 1000)
         sampled_indices = np.arange(0, num_windows, step_down)
         for idx in selected_indices:
             if idx not in sampled_indices:
                 sampled_indices = np.append(sampled_indices, idx)
         sampled_indices = np.sort(sampled_indices)
 
-        correlation_curve_sampled = []
+        correlation_curve_global = []
         for idx in sampled_indices:
             t_u = timestamps_utc[int(idx)]
-            correlation_curve_sampled.append({
+            correlation_curve_global.append({
+                "relative_sec": int(idx - best_idx),
                 "index": int(idx),
                 "timestamp_utc": t_u,
                 "pearson_r": round(float(r_curve[idx]), 4),
@@ -833,7 +854,9 @@ class ENFEngine:
             "best_match_timezone": best_tz,
             "top_candidates": candidates,
             "best_match_overlay": overlay_points,
-            "correlation_curve": correlation_curve_sampled,
+            "correlation_curve": correlation_curve_zoomed,
+            "correlation_curve_zoomed": correlation_curve_zoomed,
+            "correlation_curve_global": correlation_curve_global,
             "search_window_seconds": int(L),
             "database_total_seconds": int(N),
             "noise_floor_mu": round(mu_noise, 4),

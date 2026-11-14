@@ -104,8 +104,10 @@ export interface OverlayPoint {
 }
 
 export interface CorrelationPoint {
+  relative_sec?: number;
   index: number;
   timestamp_utc: string;
+  casablanca_time?: string;
   pearson_r: number;
   mse: number;
   is_best: boolean;
@@ -121,6 +123,8 @@ export interface MatchResponse {
   top_candidates: MatchCandidate[];
   best_match_overlay: OverlayPoint[];
   correlation_curve: CorrelationPoint[];
+  correlation_curve_zoomed?: CorrelationPoint[];
+  correlation_curve_global?: CorrelationPoint[];
   search_window_seconds: number;
   database_total_seconds: number;
   noise_floor_mu: number;

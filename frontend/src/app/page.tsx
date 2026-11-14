@@ -300,9 +300,10 @@ export default function ForensicWorkstationPage() {
                 {/* 2. Dual-Signal Overlay Chart */}
                 <DualSignalChart data={matchResult.best_match_overlay} />
 
-                {/* 3. Sliding Correlation Spike Curve */}
+                {/* 3. Sliding Correlation Spike Curve (Exact Match Peak Default) */}
                 <CorrelationCurveChart
-                  data={matchResult.correlation_curve}
+                  data={matchResult.correlation_curve_zoomed || matchResult.correlation_curve}
+                  globalData={matchResult.correlation_curve_global}
                   bestIndex={matchResult.best_match.start_index}
                 />
 
