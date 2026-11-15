@@ -29,6 +29,9 @@ interface MediaInspectorProps {
   analysisMode: EnfAnalysisMode;
   setAnalysisMode: (mode: EnfAnalysisMode) => void;
   targetFreq?: number;
+  qualityScan?: import("../lib/types").ScanQualityResponse | null;
+  onScanQuality?: () => void;
+  isScanningQuality?: boolean;
 }
 
 export const MediaInspector: React.FC<MediaInspectorProps> = ({
@@ -40,6 +43,9 @@ export const MediaInspector: React.FC<MediaInspectorProps> = ({
   analysisMode,
   setAnalysisMode,
   targetFreq = 100.0,
+  qualityScan,
+  onScanQuality,
+  isScanningQuality,
 }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -304,6 +310,9 @@ export const MediaInspector: React.FC<MediaInspectorProps> = ({
             roiDuration={roiDuration}
             onChangeRoi={onChangeRoi}
             targetFreq={targetFreq}
+            qualityScan={qualityScan}
+            onScanQuality={onScanQuality}
+            isScanningQuality={isScanningQuality}
           />
         </div>
       )}

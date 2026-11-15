@@ -215,3 +215,25 @@ export async function verifyMultiHarmonics(params: {
   }
   return res.json();
 }
+
+export async function scanEnfQuality(params: {
+  media_id: string;
+  nominal_grid_hz?: number;
+  desired_roi_sec?: number;
+}): Promise<import("./types").ScanQualityResponse> {
+  const res = await apiFetch("/api/scan-enf-quality", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      media_id: params.media_id,
+      nominal_grid_hz: params.nominal_grid_hz ?? 50.0,
+      desired_roi_sec: params.desired_roi_sec ?? 120.0,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Audio quality scan failed");
+  }
+  return res.json();
+}

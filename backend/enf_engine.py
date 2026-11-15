@@ -525,7 +525,131 @@ class ENFEngine:
             "comparison_points": comparison_points,
         }
 
-    # -----------------------------------------------------------------------
+    def scan_audio_enf_quality(
+        self,
+        media_path: str,
+        nominal_grid_hz: float = 50.0,
+        desired_roi_sec: float = 120.0
+    ) -> Dict[str, Any]:
+        """
+        Fast full-file audio scanner that maps 100 Hz mains hum SNR and harmonic prominence
+        across the entire duration, identifying optimal quiet indoor pockets where ENF is cleanest.
+        """
+        audio_raw, sr = self.extract_audio_roi_to_float64(media_path, intermediate_sr=2000)
+        audio_1000 = self.decimate_audio(audio_raw, sr, self.target_fs)
+
+        fs = self.target_fs
+        total_sec = len(audio_1000) / fs
+
+        win_sec = 6.0
+        win_len = int(win_sec * fs)
+        step_sec = 2.0
+        step_len = int(step_sec * fs)
+
+        nfft = 8192
+        win = windows.hann(win_len, sym=False).astype(np.float64)
+        freqs = np.fft.rfftfreq(nfft, 1.0 / fs)
+
+        target_2x = nominal_grid_hz * 2.0  # 100 Hz
+        target_4x = nominal_grid_hz * 4.0  # 200 Hz
+
+        m_2x = (freqs >= target_2x - 0.4) & (freqs <= target_2x + 0.4)
+        m_4x = (freqs >= target_4x - 0.8) & (freqs <= target_4x + 0.8)
+        m_noise = ((freqs >= target_2x - 4.0) & (freqs <= target_2x - 1.5)) | \
+                  ((freqs >= target_2x + 1.5) & (freqs <= target_2x + 4.0))
+
+        timeline = []
+        snrs = []
+        times = []
+
+        for t_idx in range(0, len(audio_1000) - win_len, step_len):
+            t_sec = t_idx / fs
+            frame = audio_1000[t_idx : t_idx + win_len] * win
+            X = np.abs(np.fft.rfft(frame, n=nfft))
+
+            p_2x = float(np.max(X[m_2x])) if np.any(m_2x) else 1e-12
+            p_4x = float(np.max(X[m_4x])) if np.any(m_4x) else 1e-12
+            p_noise = float(np.median(X[m_noise])) if np.any(m_noise) else 1e-12
+
+            snr_db = float(20.0 * np.log10(max(p_2x, 1e-12) / max(p_noise, 1e-12)))
+
+            snr_comp = np.clip((snr_db - 5.0) / 25.0, 0.0, 1.0) * 70.0
+            h4_comp = np.clip((p_4x / max(p_noise, 1e-12) - 1.0) / 5.0, 0.0, 1.0) * 30.0
+            q_score = float(snr_comp + h4_comp)
+
+            snrs.append(snr_db)
+            times.append(t_sec)
+            timeline.append({
+                "time_sec": round(t_sec, 1),
+                "snr_db": round(snr_db, 1),
+                "quality_score": round(q_score, 1),
+                "has_hum": bool(snr_db >= 14.0)
+            })
+
+        snrs_arr = np.array(snrs) if len(snrs) > 0 else np.array([0.0])
+        times_arr = np.array(times) if len(times) > 0 else np.array([0.0])
+
+        target_roi_dur = min(desired_roi_sec, max(30.0, total_sec * 0.85))
+        roi_candidates = []
+        step_roi = 5.0
+
+        for start in np.arange(0, max(1.0, times_arr[-1] - target_roi_dur + 1.0), step_roi):
+            end = min(total_sec, start + target_roi_dur)
+            mask = (times_arr >= start) & (times_arr <= end)
+            if not np.any(mask):
+                continue
+            sub_snrs = snrs_arr[mask]
+            mean_snr = float(np.mean(sub_snrs))
+            pct_clean = float(np.mean(sub_snrs >= 14.0) * 100.0)
+
+            c_score = float(np.clip((mean_snr - 6.0) / 22.0, 0.0, 1.0) * 60.0 + (pct_clean / 100.0) * 40.0)
+
+            m_s, s_s = int(start // 60), int(start % 60)
+            m_e, s_e = int(end // 60), int(end % 60)
+
+            roi_candidates.append({
+                "start_sec": round(float(start), 1),
+                "end_sec": round(float(end), 1),
+                "duration_sec": round(float(end - start), 1),
+                "start_formatted": f"{m_s:02d}:{s_s:02d}",
+                "end_formatted": f"{m_e:02d}:{s_e:02d}",
+                "mean_snr_db": round(mean_snr, 1),
+                "clean_pct": round(pct_clean, 1),
+                "quality_score": round(c_score, 1)
+            })
+
+        roi_candidates.sort(key=lambda x: (x["quality_score"], x["mean_snr_db"]), reverse=True)
+
+        selected_pockets = []
+        for c in roi_candidates:
+            if all(abs(c["start_sec"] - s["start_sec"]) >= 45.0 for s in selected_pockets):
+                c["rank"] = len(selected_pockets) + 1
+                if c["rank"] == 1:
+                    c["badge"] = "OPTIMAL FOR CORRELATION"
+                    c["label"] = f"Top #1 Cleanest: {c['start_formatted']} – {c['end_formatted']} (+{c['mean_snr_db']} dB)"
+                else:
+                    c["badge"] = "QUIET ENF POCKET"
+                    c["label"] = f"Pocket #{c['rank']}: {c['start_formatted']} – {c['end_formatted']} (+{c['mean_snr_db']} dB)"
+                selected_pockets.append(c)
+            if len(selected_pockets) >= 5:
+                break
+
+        target_pts = 250
+        step_down = max(1, len(timeline) // target_pts)
+        down_timeline = timeline[::step_down]
+
+        return {
+            "total_duration_sec": round(total_sec, 1),
+            "scanned_steps": len(timeline),
+            "timeline": down_timeline,
+            "recommended_pockets": selected_pockets,
+            "overall_mean_snr": round(float(np.mean(snrs_arr)), 1) if len(snrs_arr) else 0.0,
+            "overall_max_snr": round(float(np.max(snrs_arr)), 1) if len(snrs_arr) else 0.0,
+            "best_pocket": selected_pockets[0] if selected_pockets else None
+        }
+
+
+        # -----------------------------------------------------------------------
     # 4. ACOUSTIC ENF EXTRACTION INTERFACE
     # -----------------------------------------------------------------------
 

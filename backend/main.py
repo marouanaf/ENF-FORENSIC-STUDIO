@@ -210,6 +210,33 @@ class MatchDatabaseRequest(BaseModel):
 # API Endpoints
 # ---------------------------------------------------------------------------
 
+class ScanQualityRequest(BaseModel):
+    media_id: str
+    nominal_grid_hz: float = 50.0
+    desired_roi_sec: float = 120.0
+
+
+@app.post("/api/scan-enf-quality")
+def scan_enf_quality_endpoint(req: ScanQualityRequest):
+    """
+    Scans the entire audio file to compute second-by-second 100 Hz mains hum SNR
+    and recommends the cleanest quiet indoor pockets for optimal ENF correlation.
+    """
+    if req.media_id not in media_registry:
+        raise HTTPException(status_code=404, detail="Media not found")
+    media = media_registry[req.media_id]
+    try:
+        res = engine.scan_audio_enf_quality(
+            media_path=media["path"],
+            nominal_grid_hz=req.nominal_grid_hz,
+            desired_roi_sec=req.desired_roi_sec
+        )
+        media["quality_scan"] = res
+        return res
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Audio quality scan failed: {str(e)}")
+
+
 class FourierSpectrumRequest(BaseModel):
     media_id: str
     start_sec: float = 0.0

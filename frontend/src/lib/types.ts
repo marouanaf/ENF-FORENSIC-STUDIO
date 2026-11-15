@@ -36,6 +36,7 @@ export interface MediaInfo {
     minute: number;
     second: number;
   };
+  quality_scan?: ScanQualityResponse;
 }
 
 export interface HarmonicCandidate {
@@ -279,4 +280,35 @@ export interface MultiHarmonicVerification {
     fused_hz?: number;
     diff_mhz: number;
   }>;
+}
+
+export interface EnfQualityPoint {
+  time_sec: number;
+  snr_db: number;
+  quality_score: number;
+  has_hum: boolean;
+}
+
+export interface RecommendedRoiPocket {
+  rank: number;
+  start_sec: number;
+  end_sec: number;
+  duration_sec: number;
+  start_formatted: string;
+  end_formatted: string;
+  mean_snr_db: number;
+  clean_pct: number;
+  quality_score: number;
+  badge: string;
+  label: string;
+}
+
+export interface ScanQualityResponse {
+  total_duration_sec: number;
+  scanned_steps: number;
+  timeline: EnfQualityPoint[];
+  recommended_pockets: RecommendedRoiPocket[];
+  overall_mean_snr: number;
+  overall_max_snr: number;
+  best_pocket?: RecommendedRoiPocket;
 }

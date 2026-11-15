@@ -20,6 +20,7 @@ import {
   extractEnfMultiModal,
   fetchDatabases,
   matchDatabase,
+  scanEnfQuality,
 } from "../lib/api";
 import {
   EnfAnalysisMode,
@@ -27,6 +28,7 @@ import {
   GridDatabaseInfo,
   MatchResponse,
   MediaInfo,
+  ScanQualityResponse,
 } from "../lib/types";
 import { AlertCircle, CheckCircle, ShieldCheck, Zap, FileText } from "lucide-react";
 
@@ -55,6 +57,8 @@ export default function ForensicWorkstationPage() {
 
   // UI state
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [qualityScan, setQualityScan] = useState<ScanQualityResponse | null>(null);
+  const [isScanningQuality, setIsScanningQuality] = useState(false);
   const [isDownloadingYear, setIsDownloadingYear] = useState(false);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [reportModalOpen, setReportModalOpen] = useState(false);
@@ -189,6 +193,32 @@ export default function ForensicWorkstationPage() {
     }
   };
 
+  const handleScanQuality = async (targetMedia?: MediaInfo | null) => {
+    const curMedia = targetMedia || mediaInfo;
+    if (!curMedia) return;
+    setIsScanningQuality(true);
+    try {
+      const scanRes = await scanEnfQuality({
+        media_id: curMedia.media_id,
+        nominal_grid_hz: nominalGrid,
+        desired_roi_sec: 120.0,
+      });
+      setQualityScan(scanRes);
+      if (scanRes.best_pocket) {
+        setRoiStart(scanRes.best_pocket.start_sec);
+        setRoiDuration(scanRes.best_pocket.duration_sec);
+        showNotification(
+          "success",
+          `Found Cleanest ENF Pocket: ${scanRes.best_pocket.start_formatted} – ${scanRes.best_pocket.end_formatted} (+${scanRes.best_pocket.mean_snr_db} dB SNR)!`
+        );
+      }
+    } catch (err: unknown) {
+      console.warn("Quality scan warning:", err);
+    } finally {
+      setIsScanningQuality(false);
+    }
+  };
+
   const activeDbInfo = databases.find((d) => selectedDatabaseIds.includes(d.database_id));
 
   return (
@@ -233,7 +263,9 @@ export default function ForensicWorkstationPage() {
                 setMediaInfo(info);
                 setExtractionResult(null);
                 setMatchResult(null);
-                showNotification("info", `Loaded: ${info.filename} (${info.duration}s). Ready for multi-year scan.`);
+                setQualityScan(null);
+                showNotification("info", `Loaded: ${info.filename} (${info.duration}s). Scanning audio for cleanest 100 Hz hum...`);
+                handleScanQuality(info);
               }}
               roiStart={roiStart}
               roiDuration={roiDuration}
@@ -244,6 +276,9 @@ export default function ForensicWorkstationPage() {
               analysisMode={analysisMode}
               setAnalysisMode={setAnalysisMode}
               targetFreq={nominalGrid * harmonicMultiplier}
+              qualityScan={qualityScan}
+              onScanQuality={() => handleScanQuality()}
+              isScanningQuality={isScanningQuality}
             />
           </div>
 
